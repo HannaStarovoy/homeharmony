@@ -163,7 +163,7 @@ function renderCatalog(){
 function renderProduct(){
  const p=find(state.productId)||products[0],v=selectedVariant(p),index=p.variants.indexOf(v);
  const keys=optionKeys(p),left=v?remaining(p,v):0;
- const attrs={...p.attrs,...v?.options,...(v?{Артикул:v.sku}:{})};
+ const attrs={...p.attrs,...v?.options,...(v?{Артикул:v.sku,...(v.externalSku?{'Артикул Emall':v.externalSku}:{})}:{})};
  const related=products.filter(x=>x.cat===p.cat&&x.id!==p.id).slice(0,4);
  const choices=keys.filter(key=>new Set(p.variants.map(v=>v.options[key])).size>1).map(key=>{
   const values=[...new Set(p.variants.map(v=>v.options[key]))];

@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import { Problem } from './errors.mjs';
 import { createOrderStore } from './orders.mjs';
+import { createImportStore } from './imports.mjs';
 export { Problem } from './errors.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
@@ -57,14 +58,15 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   }
   const orders=createOrderStore(db,{reserveHours});
   const categories = () => db.prepare('SELECT id,name,parent FROM categories ORDER BY rowid').all().map(c => ({...c}));
-  function products(publishedOnly = false) {
-    orders.expire();
+  function products(publishedOnly = false,{expire=true}={}) {
+    if(expire)orders.expire();
     const rows = db.prepare(`SELECT * FROM products ${publishedOnly ? "WHERE status='published'" : ''} ORDER BY date_rank DESC, id`).all();
     const variants = db.prepare('SELECT * FROM variants ORDER BY position').all();
+    const sources=new Map(db.prepare('SELECT sku,external_sku FROM import_variants').all().map(row=>[row.sku,row.external_sku]));
     const byProduct = new Map();
     for (const v of variants) {
       if (!byProduct.has(v.product_id)) byProduct.set(v.product_id, []);
-      byProduct.get(v.product_id).push({sku:v.sku,name:v.name,options:JSON.parse(v.options),price:v.price_cents/100,old:v.old_cents/100,stock:publishedOnly?Math.max(0,v.stock-orders.reserved(v.sku)):v.stock,...(publishedOnly?{}:{reserved:orders.reserved(v.sku),available:Math.max(0,v.stock-orders.reserved(v.sku))}),color:v.color,images:JSON.parse(v.images)});
+      byProduct.get(v.product_id).push({sku:v.sku,name:v.name,options:JSON.parse(v.options),price:v.price_cents/100,old:v.old_cents/100,stock:publishedOnly?Math.max(0,v.stock-orders.reserved(v.sku)):v.stock,...(publishedOnly?{}:{reserved:orders.reserved(v.sku),available:Math.max(0,v.stock-orders.reserved(v.sku))}),color:v.color,images:JSON.parse(v.images),...(sources.has(v.sku)?{externalSku:sources.get(v.sku),sourceManaged:true}:{})});
     }
     return rows.map(p => {
       const list = byProduct.get(p.id) || [];
@@ -72,10 +74,11 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       return publishedOnly ? value : {...value,status:p.status,version:p.version,updatedAt:p.updated_at};
     });
   }
-  function saveProduct(input, id) {
-    orders.expire();
+  function saveProduct(input,id,{withinTransaction=false,returnProduct=true}={}) {
+    if(withinTransaction&&!db.isTransaction)throw new Error('An import requires an active transaction.');
+    if(!withinTransaction)orders.expire();
     const value = validateProduct(input, categories(), db);
-    db.exec('BEGIN IMMEDIATE');
+    if(!withinTransaction)db.exec('BEGIN IMMEDIATE');
     try {
       const current = id ? db.prepare('SELECT version,type,tag,popularity,date_rank FROM products WHERE id=?').get(id) : null;
       if (id && !current) throw new Problem(404, 'Товар не найден.');
@@ -85,10 +88,13 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
         const owner = db.prepare('SELECT product_id FROM variants WHERE sku=?').get(v.sku);
         if (owner && owner.product_id !== productId) throw new Problem(409, `Артикул ${v.sku} уже используется другим товаром.`, 'variants');
       }
+      const source=db.prepare('SELECT environment FROM import_products WHERE product_id=?').get(productId);
+      if(source?.environment==='sandbox'&&value.status==='published')throw new Problem(409,'Тестовый товар Emall нельзя публиковать в рабочем каталоге.');
       if(current){
         const existing=db.prepare('SELECT sku,options FROM variants WHERE product_id=?').all(productId);
         for(const old of existing){
           const hold=orders.reserved(old.sku),replacement=value.variants.find(v=>v.sku===old.sku);
+          if(!replacement&&db.prepare('SELECT 1 FROM import_variants WHERE sku=?').get(old.sku))throw new Problem(409,'Артикул связан с источником импорта. Уберите товар с витрины вместо удаления связанного SKU.');
           if(hold&&!replacement)throw new Problem(409,'Нельзя удалить вариант: он зарезервирован в заказе.');
           if(replacement&&replacement.stock<hold)throw new Problem(409,`Физический остаток ${old.sku} не может быть меньше резерва (${hold} шт.).`);
           const canonical=object=>JSON.stringify(Object.keys(object).sort().map(k=>[k,object[k]]));
@@ -105,16 +111,18 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
           .run(productId,value.name,value.cat,value.summary,json(value.attrs),json(value.images),value.status,Date.now(),new Date().toISOString());
       }
       value.variants.forEach((v,i)=>db.prepare('INSERT INTO variants VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(sku) DO UPDATE SET name=excluded.name,options=excluded.options,price_cents=excluded.price_cents,old_cents=excluded.old_cents,stock=excluded.stock,color=excluded.color,images=excluded.images,position=excluded.position').run(v.sku,productId,v.name,json(v.options),v.priceCents,v.oldCents,v.stock,v.color,json(v.images),i));
-      db.exec('COMMIT');
-      return products().find(p=>p.id===productId);
-    } catch (error) { db.exec('ROLLBACK'); throw error; }
+      if(!withinTransaction)db.exec('COMMIT');
+      return returnProduct?products(false,{expire:false}).find(p=>p.id===productId):db.prepare('SELECT id,version FROM products WHERE id=?').get(productId);
+    } catch (error) { if(!withinTransaction)db.exec('ROLLBACK'); throw error; }
   }
   function isPublicMedia(url) {
     return !!db.prepare(`SELECT 1 FROM products p,json_each(p.images) i WHERE p.status='published' AND i.value=?
       UNION ALL SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id,json_each(v.images) i
       WHERE p.status='published' AND i.value=? LIMIT 1`).get(url,url);
   }
-  return { db, dataDir, uploadDir, categories, products, saveProduct, isPublicMedia, orders, close:()=>db.close() };
+  const store={db,dataDir,uploadDir,categories,products,saveProduct,isPublicMedia,orders,close:()=>db.close()};
+  store.imports=createImportStore(store,validateProduct);
+  return store;
 }
 
 function text(value, label, max, required = false) {
