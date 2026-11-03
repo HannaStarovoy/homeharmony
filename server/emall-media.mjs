@@ -8,6 +8,7 @@ import {join,resolve} from 'node:path';
 import sharp from 'sharp';
 
 const MAX_BYTES=8*1024*1024,MAX_PIXELS=25_000_000,MAX_PHOTOS=8,MAX_REDIRECTS=4;
+const UNAVAILABLE_PHOTO_ERRORS=new Set(['HTTP_ERROR','NETWORK','INVALID_IMAGE','IMAGE_TOO_LARGE','INVALID_RESPONSE','TOO_MANY_REDIRECTS']);
 const IMAGE_REASONS=new Set(['unsupported-format','pixel-limit','animated','decode-failed']);
 const IMAGE_FORMATS=new Set(['jpeg','png','webp','heif','avif','gif','tiff','svg','html','json','unknown']);
 const IMAGE_STAGES=new Set(['metadata','decode','validation']);
@@ -28,6 +29,7 @@ const MESSAGES={
  TOO_MANY_REDIRECTS:'Превышено число перенаправлений фотографии Emall.',
  IMAGE_TOO_LARGE:'Фотография Emall превышает допустимый размер.',
  INVALID_IMAGE:'Нужна корректная статическая фотография JPEG, PNG или WebP до 25 мегапикселей.',
+ NO_VALID_PHOTOS:'Не удалось подготовить ни одной корректной фотографии товара Emall.',
  WRITE_FAILED:'Не удалось записать подготовленную фотографию Emall.'
 };
 const safeHostname=value=>typeof value==='string'&&value.length<=253&&/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/.test(value)?value:null;
@@ -212,8 +214,8 @@ async function saveImage(directory,filename,data){
  }
 }
 
-export async function prepareEmallImages(imageJobs,{directory,transport=curlTransport}={}){
- if(typeof directory!=='string'||!directory.trim()||typeof transport!=='function'||!Array.isArray(imageJobs)||imageJobs.length>5000)throw failure('INVALID_CONFIG');
+export async function prepareEmallImages(imageJobs,{directory,transport=curlTransport,allowUnavailable=false}={}){
+ if(typeof directory!=='string'||!directory.trim()||typeof transport!=='function'||typeof allowUnavailable!=='boolean'||!Array.isArray(imageJobs)||imageJobs.length>5000)throw failure('INVALID_CONFIG');
  const ids=new Set(),jobs=[];
  for(const job of imageJobs){
   if(!record(job)||!(typeof job.externalId==='string'||Number.isSafeInteger(job.externalId))||!String(job.externalId).trim()||String(job.externalId).length>128||/[\x00-\x1f\x7f]/.test(String(job.externalId))||!Array.isArray(job.urls))throw failure('INVALID_CONFIG');
@@ -230,7 +232,8 @@ export async function prepareEmallImages(imageJobs,{directory,transport=curlTran
   if(!job.urls.length)warnings.push({externalId:job.externalId,code:'NO_SOURCE_PHOTOS'});
   if(job.truncated)warnings.push({externalId:job.externalId,code:'PHOTO_LIMIT'});
   const seen=new Set();
-  for(const url of job.urls){
+  for(const [photoIndex,url] of job.urls.entries()){
+   try{
    let photo=downloads.get(url);
    if(!photo){
     const downloaded=await downloadImage(url,transport,downloads);
@@ -249,7 +252,12 @@ export async function prepareEmallImages(imageJobs,{directory,transport=curlTran
     for(const alias of downloaded.urls)downloads.set(alias,photo);
    }
    if(!seen.has(photo.url)){seen.add(photo.url);imagesByExternalId[job.externalId].push(photo.url)}
+   }catch(error){
+    if(!allowUnavailable||!(error instanceof EmallMediaError)||!UNAVAILABLE_PHOTO_ERRORS.has(error.code))throw error;
+    warnings.push({externalId:job.externalId,code:'SOURCE_PHOTO_SKIPPED',photoIndex,reason:error.code,status:error.status??null,imageDiagnostic:error.imageDiagnostic??null});
+   }
   }
+  if(job.urls.length&&!imagesByExternalId[job.externalId].length)throw failure('NO_VALID_PHOTOS');
  }
  return {imagesByExternalId,media,warnings};
 }

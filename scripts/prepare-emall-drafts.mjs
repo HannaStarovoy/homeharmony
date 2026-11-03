@@ -25,7 +25,7 @@ try{
  const prepared=await prepareEmallRecords(sourceClient,{limit:5,categories,categoryMap});
  if(prepared.records.length!==5)throw new Error('EXPECTED_FIVE_PRODUCTS');
  preparedReview=prepared;
- const photos=await prepareEmallImages(prepared.imageJobs,{directory:staging});
+ const photos=await prepareEmallImages(prepared.imageJobs,{directory:staging,allowUnavailable:true});
  for(const product of prepared.records)product.images=photos.imagesByExternalId[product.externalId]||[];
  const manifest={version:1,source:{provider:'emall',environment:'production',account:'homeharmony-emall-main'},products:prepared.records,media:photos.media};
  await writeFile(join(staging,'manifest.json'),JSON.stringify(manifest,null,2)+'\n','utf8');

@@ -153,6 +153,68 @@ test('required-photo download failures and bad responses are never reported as i
  assert.deepEqual(await readdir(path),[]);
 });
 
+test('unavailable-photo fallback promotes the next real JPEG and keeps strict mode unchanged',async t=>{
+ const path=await directory(t),body=Buffer.from('<!doctype html><html>PRIVATE_BODY</html>'),jpeg=await sharp(await photo()).jpeg().toBuffer();
+ const urls=[source('PRIVATE_IMAGE?token=PRIVATE_QUERY'),source('valid.jpg')],calls=[];
+ const transport=async({url})=>{calls.push(url);return {status:200,body:url===urls[0]?body:jpeg}};
+ const result=await prepareEmallImages([job(urls)],{directory:path,transport,allowUnavailable:true});
+ assert.deepEqual(calls,urls);assert.equal(result.media.length,1);
+ assert.deepEqual(result.imagesByExternalId['emall:1'],[result.media[0].url]);
+ assert.deepEqual(result.warnings,[{externalId:'emall:1',code:'SOURCE_PHOTO_SKIPPED',photoIndex:0,reason:'INVALID_IMAGE',status:null,imageDiagnostic:{reason:'unsupported-format',format:'html',width:null,height:null,pages:null,bytes:body.length,stage:'metadata'}}]);
+ assert(!JSON.stringify(result).includes('PRIVATE'));assert(!JSON.stringify(result).includes('https://'));
+ calls.length=0;
+ await assert.rejects(prepareEmallImages([job(urls)],{directory:path,transport}),code('INVALID_IMAGE'));
+ assert.deepEqual(calls,[urls[0]]);
+});
+
+test('unavailable secondary photos preserve the remaining source order',async t=>{
+ const path=await directory(t),red=await photo(),blue=await photo('#1740d0');
+ const result=await prepareEmallImages([job([source('red.png'),source('bad.png'),source('blue.png')])],{directory:path,allowUnavailable:true,transport:async({url})=>url===source('bad.png')?{status:404,body:Buffer.from('PRIVATE_BODY')}:{status:200,body:url===source('red.png')?red:blue}});
+ assert.equal(result.media.length,2);
+ assert.deepEqual(result.imagesByExternalId['emall:1'],result.media.map(item=>item.url));
+ assert.deepEqual(result.warnings,[{externalId:'emall:1',code:'SOURCE_PHOTO_SKIPPED',photoIndex:1,reason:'HTTP_ERROR',status:404,imageDiagnostic:null}]);
+});
+
+test('each recoverable source failure may fall back to a valid photo',async t=>{
+ const path=await directory(t),input=await photo();
+ const cases=[
+  [async()=>{throw new Error('PRIVATE_NETWORK')},'NETWORK'],
+  [async()=>({status:404,body:Buffer.from('PRIVATE_BODY')}),'HTTP_ERROR'],
+  [async()=>({status:200,body:'PRIVATE_BODY'}),'INVALID_RESPONSE'],
+  [async()=>({status:200,body:Buffer.alloc(8*1024*1024+1)}),'IMAGE_TOO_LARGE'],
+  [async()=>({status:200,body:Buffer.alloc(0)}),'INVALID_IMAGE'],
+  [async()=>({status:302,location:source('bad.png'),body:Buffer.alloc(0)}),'TOO_MANY_REDIRECTS']
+ ];
+ for(const [fail,reason] of cases){
+  const result=await prepareEmallImages([job([source('bad.png'),source('valid.png')])],{directory:path,allowUnavailable:true,transport:request=>request.url===source('bad.png')?fail():{status:200,body:input}});
+  assert.equal(result.imagesByExternalId['emall:1'].length,1);assert.equal(result.warnings[0].reason,reason);assert(!JSON.stringify(result).includes('PRIVATE'));
+ }
+});
+
+test('fallback fails safely if all selected photos are unavailable but retains no-source draft support',async t=>{
+ const path=await directory(t);
+ await assert.rejects(prepareEmallImages([job([source('PRIVATE?key=PRIVATE'),source('also-bad.png')])],{directory:path,allowUnavailable:true,transport:async()=>({status:404,body:Buffer.from('PRIVATE_BODY')})}),error=>{
+  assert(error instanceof EmallMediaError);assert.equal(error.code,'NO_VALID_PHOTOS');assert.equal(error.status,null);
+  assert(!JSON.stringify(error).includes('PRIVATE'));assert(!error.message.includes('PRIVATE'));return true;
+ });
+ const empty=await prepareEmallImages([job([])],{directory:path,allowUnavailable:true,transport:async()=>assert.fail('no download expected')});
+ assert.deepEqual(empty,{imagesByExternalId:{'emall:1':[]},media:[],warnings:[{externalId:'emall:1',code:'NO_SOURCE_PHOTOS'}]});
+ assert.deepEqual(await readdir(path),[]);
+});
+
+test('fallback never masks unsafe sources, redirects or failed media writes',async t=>{
+ const path=await directory(t),input=await photo();let calls=0;
+ for(const [url,expected] of [['http://images.emall.by/a','INVALID_SOURCE_URL'],['https://evil.example/PRIVATE','HOST_NOT_ALLOWED']]){
+  await assert.rejects(prepareEmallImages([job([source('valid.png'),url])],{directory:path,allowUnavailable:true,transport:async()=>{calls++;return {status:200,body:input}}}),code(expected));
+  assert.equal(calls,0);
+  await assert.rejects(prepareEmallImages([job([source('redirect.png'),source('valid.png')])],{directory:path,allowUnavailable:true,transport:async()=>{calls++;return {status:302,location:url,body:Buffer.alloc(0)}}}),code(expected));
+  assert.equal(calls,1);calls=0;
+ }
+ const outside=await directory(t);await symlink(outside,join(path,'media'),'dir');
+ await assert.rejects(prepareEmallImages([job([source('valid.png')])],{directory:path,allowUnavailable:true,transport:async()=>({status:200,body:input})}),code('WRITE_FAILED'));
+ assert.deepEqual(await readdir(outside),[]);
+});
+
 test('JPEG, PNG and WebP are decoded; SVG, GIF, animations, truncation and oversized pixels are rejected',async t=>{
  const path=await directory(t),input=await photo();
  for(const body of [input,await sharp(input).jpeg().toBuffer(),await sharp(input).webp().toBuffer()]){
@@ -231,6 +293,7 @@ test('invalid job configuration fails without touching transport',async t=>{
  for(const jobs of [null,{},[null],[{}],[job(null)],[job([],null)],[job([]),job([])]])await assert.rejects(prepareEmallImages(jobs,{directory:path,transport}),code('INVALID_CONFIG'));
  await assert.rejects(prepareEmallImages([job([])],{transport}),code('INVALID_CONFIG'));
  await assert.rejects(prepareEmallImages([job([])],{directory:path,transport:null}),code('INVALID_CONFIG'));
+ await assert.rejects(prepareEmallImages([job([])],{directory:path,transport,allowUnavailable:'true'}),code('INVALID_CONFIG'));
  assert.equal(calls,0);
 });
 
