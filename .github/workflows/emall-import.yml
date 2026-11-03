@@ -33,3 +33,11 @@ jobs:
           path: var/emall-prepared/
           if-no-files-found: error
           retention-days: 7
+      - name: Сохранить диагностику категории при ошибке
+        if: failure()
+        uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
+        with:
+          name: emall-import-diagnostic
+          path: var/emall-prepared.diagnostic.json
+          if-no-files-found: ignore
+          retention-days: 1

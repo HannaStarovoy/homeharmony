@@ -1,5 +1,7 @@
 // Converts a bounded, read-only Emall result into the local draft import contract.
 // Images are handed to the media importer separately; remote URLs never enter records.
+import {EmallError} from './emall.mjs';
+
 const ERRORS={
  INVALID_CONFIG:'Некорректные настройки подготовки каталога Emall.',
  INVALID_PRODUCT:'Карточка Emall содержит некорректные обязательные данные.',
@@ -20,6 +22,24 @@ const has=(value,key)=>Object.hasOwn(value,key);
 function sourceInteger(value,min=0,max=Number.MAX_SAFE_INTEGER){
  if(typeof value==='string'){if(!/^\d+$/.test(value))return null;value=Number(value)}
  return Number.isSafeInteger(value)&&value>=min&&value<=max?value:null;
+}
+function dictionaryFailure(error){
+ try{
+  if(error instanceof EmallError){
+   // Revalidate even typed errors before copying their fixed diagnostic fields.
+   const safe=new EmallError(error.code,error.status,error.diagnostic);
+   return {code:safe.code,status:safe.status,diagnostic:safe.diagnostic};
+  }
+ }catch{}
+ return {code:'DICTIONARY_UNAVAILABLE',status:null,diagnostic:null};
+}
+function categoryUnmapped(categoryId,path=[],dictionaryError=null){
+ const error=new EmallAdapterError('CATEGORY_UNMAPPED',categoryId);
+ error.categoryReview={categoryId,path:path.slice(0,20)
+  .filter(name=>typeof name==='string').map(plaintext)
+  .filter(name=>!/\b(?:[a-z][a-z\d+.-]*:\/\/|www\.)/i.test(name))
+  .map(name=>name.slice(0,200)),dictionaryError};
+ return error;
 }
 const entityNames={amp:'&',lt:'<',gt:'>',quot:'"',apos:"'",nbsp:' ',ndash:'–',mdash:'—',hellip:'…',laquo:'«',raquo:'»',copy:'©',reg:'®',trade:'™',bull:'•',middot:'·',euro:'€',times:'×'};
 function decodeEntities(value){
@@ -133,19 +153,19 @@ export async function prepareEmallRecords(client,{limit=5,categories,categoryMap
   ids.add(id);
  }
  if(!products.length)return {records,imageJobs,warnings};
- let categoryPaths=new Map();
+ let categoryPaths=new Map(),dictionaryError=null;
  try{
   const result=await client.getCatalogCategories();
   categoryPaths=sourceCategoryPaths(Array.isArray(result)?result:result?.categories);
- }catch{warn('CATEGORY_DICTIONARY_UNAVAILABLE')}
+ }catch(error){dictionaryError=dictionaryFailure(error);warn('CATEGORY_DICTIONARY_UNAVAILABLE')}
  const dictionaryCache=new Map();
  for(const product of products){
   const externalId=String(product.id),detail={externalId},categoryId=sourceInteger(product.category_id,1);
-  if(categoryId===null)throw new EmallAdapterError('CATEGORY_UNMAPPED');
+  if(categoryId===null)throw categoryUnmapped(null,[],dictionaryError);
   const mapped=overrides.get(categoryId)??null;
   const path=categoryPaths.get(categoryId)??(typeof product.category_name==='string'?[product.category_name]:[]);
   const cat=mapped??matchCategory(path,catalog);
-  if(!cat)throw new EmallAdapterError('CATEGORY_UNMAPPED',categoryId);
+  if(!cat)throw categoryUnmapped(categoryId,path,dictionaryError);
   const kopecks=sourceInteger(product.prices?.price,1,100_000_000);
   if(kopecks===null)throw new EmallAdapterError('PRICE_REQUIRED');
   const stock=sourceInteger(product.stock,0,1_000_000);

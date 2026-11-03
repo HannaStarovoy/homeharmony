@@ -2,6 +2,7 @@
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
 import {prepareEmallRecords,EmallAdapterError} from '../server/emall-adapter.mjs';
+import {EmallError} from '../server/emall.mjs';
 const categories=[
  {id:'all',name:'Все товары',parent:null},
  {id:'accessories',name:'Головные уборы и аксессуары',parent:'all'},
@@ -73,9 +74,56 @@ test('unknown categories fail with fixed diagnostics even if product text mentio
  const raw={...card(1),category_id:999,name:'Шапки <private response>',description:'Шапки'};
  await assert.rejects(prepare(client([raw])),error=>{
   assert.equal(error.code,'CATEGORY_UNMAPPED');assert.equal(error.categoryId,999);
+  assert.deepEqual(error.categoryReview,{categoryId:999,path:[],dictionaryError:null});
   assert(!String(error.stack).includes('<private response>'));return true;
  });
- await assert.rejects(prepare(client([{...card(1),category_id:null}])),code('CATEGORY_UNMAPPED'));
+ await assert.rejects(prepare(client([{...card(1),category_id:null}])),error=>{
+  assert.equal(error.code,'CATEGORY_UNMAPPED');
+  assert.deepEqual(error.categoryReview,{categoryId:null,path:[],dictionaryError:null});return true;
+ });
+});
+test('unmapped category review contains only the selected bounded category path',async()=>{
+ const raw={...card(1),category_id:4702,name:'private product name',description:'private product description',category_name:'Unused category fallback'};
+ const tree=[{id:4701,name:'Неизвестный раздел',children:[{id:4702,name:'Новая категория'}]}];
+ await assert.rejects(prepare(client([raw],{tree})),error=>{
+  assert.deepEqual(error.categoryReview,{categoryId:4702,path:['Неизвестный раздел','Новая категория'],dictionaryError:null});
+  assert(!JSON.stringify(error).includes('private product'));assert(!JSON.stringify(error).includes('https://'));return true;
+ });
+ let deep={id:2020,name:'К'.repeat(250)};
+ for(let i=19;i>=0;i--)deep={id:2000+i,name:'К'.repeat(250),children:[deep]};
+ await assert.rejects(prepare(client([{...raw,category_id:2020}],{tree:[deep]})),error=>{
+  assert.equal(error.categoryReview.path.length,20);assert(error.categoryReview.path.every(name=>typeof name==='string'&&name.length===200));return true;
+ });
+ for(const category_name of ['https://private.example.test/category','https&#58;//private.example.test/category']){
+  await assert.rejects(prepare(client([{...raw,category_name}],{tree:[]})),error=>{
+   assert.deepEqual(error.categoryReview.path,[]);return true;
+  });
+ }
+});
+test('unmapped category review retains only safe typed dictionary failure fields',async()=>{
+ const diagnostic={field:'meta.count',expected:'count-matches-data',actual:'integer'};
+ for(const failure of [new EmallError('HTTP_ERROR',403),new EmallError('INVALID_RESPONSE',200,diagnostic)]){
+  failure.message='private exception message';failure.privateResponse={secret:'private arbitrary key'};
+  if(failure.diagnostic)failure.diagnostic={...failure.diagnostic,privateKey:'private arbitrary key'};
+  const instance=client([{...card(1),category_name:'Новая категория'}]);instance.getCatalogCategories=async()=>{throw failure};
+  await assert.rejects(prepare(instance),error=>{
+   assert.deepEqual(error.categoryReview,{categoryId:11,path:['Новая категория'],dictionaryError:{code:failure.code,status:failure.status,diagnostic:failure.code==='INVALID_RESPONSE'?diagnostic:null}});
+   assert(!JSON.stringify(error).includes('private'));assert(!String(error.stack).includes('private'));return true;
+  });
+ }
+});
+test('unknown dictionary failures cannot contribute messages, keys, or lookalike diagnostics',async()=>{
+ const failures=[new Error('private transport response'),{code:'HTTP_ERROR',status:401,diagnostic:{field:'meta.count',expected:'count-matches-data',actual:'integer'},privateKey:'private response'}];
+ const malformed=new EmallError('INVALID_RESPONSE');malformed.code='private-code';malformed.status='private-status';malformed.diagnostic={field:'private-key',expected:'object',actual:'string'};
+ failures.push(malformed);
+ for(const failure of failures){
+  const instance=client();instance.getCatalogCategories=async()=>{throw failure};
+  await assert.rejects(prepare(instance),error=>{
+   const expectedCode=failure instanceof EmallError?'INVALID_RESPONSE':'DICTIONARY_UNAVAILABLE';
+   assert.deepEqual(error.categoryReview,{categoryId:11,path:[],dictionaryError:{code:expectedCode,status:null,diagnostic:null}});
+   assert(!JSON.stringify(error).includes('private'));return true;
+  });
+ }
 });
 test('explicit category ID overrides use an existing approved category only',async()=>{
  const raw={...card(1),category_id:999};

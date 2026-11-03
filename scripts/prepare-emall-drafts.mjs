@@ -9,9 +9,9 @@ import {prepareEmallImages,EmallMediaError} from '../server/emall-media.mjs';
 import {openStore,root} from '../server/store.mjs';
 import {loadDraftBundle} from '../server/draft-bundle.mjs';
 
-let staging,tempDatabase,store;
+let staging,tempDatabase,store,output=resolve(root,'var/emall-prepared');
 try{
- const args=process.argv.slice(2);let output=resolve(root,'var/emall-prepared');
+ const args=process.argv.slice(2);
  for(let i=0;i<args.length;i++){
   if(args[i]==='--output'&&args[i+1])output=resolve(args[++i]);
   else throw new Error('INVALID_ARGUMENT');
@@ -45,6 +45,12 @@ try{
  if(Number.isSafeInteger(error.categoryId))report.categoryId=error.categoryId;
  if(known&&typeof error.hostname==='string'&&/^[a-z0-9.-]+$/i.test(error.hostname))report.hostname=error.hostname;
  if(known&&Number.isInteger(error.status))report.status=error.status;
+ if(error instanceof EmallAdapterError&&error.code==='CATEGORY_UNMAPPED'&&error.categoryReview){
+  const value=JSON.stringify(error.categoryReview,null,2),token=process.env.EMALL_API_TOKEN;
+  const redacted=token?value.split(token).join('[redacted]'):value;
+  await mkdir(dirname(output),{recursive:true});
+  await writeFile(output+'.diagnostic.json',redacted+'\n','utf8');
+ }
  console.error(JSON.stringify(report));process.exitCode=1;
 }finally{
  store?.close();if(staging)await rm(staging,{recursive:true,force:true});if(tempDatabase)await rm(tempDatabase,{recursive:true,force:true});

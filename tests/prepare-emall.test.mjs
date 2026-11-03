@@ -49,5 +49,8 @@ test('unmapped categories fail without a partial output bundle or source details
  try{
   const result=f.run();assert.equal(result.status,1);assert.match(result.stderr,/CATEGORY_UNMAPPED/);assert(!result.stderr.includes('Synthetic card'));
   assert.equal(await stat(f.output).then(()=>true,()=>false),false);
+  const diagnostic=JSON.parse(await readFile(f.output+'.diagnostic.json','utf8'));
+  assert.equal(diagnostic.categoryId,998123);assert.deepEqual(diagnostic.path,['Unmapped synthetic category']);
+  assert(!JSON.stringify(diagnostic).includes('Synthetic card'));assert(!JSON.stringify(diagnostic).includes('FICTIONAL_PREPARE_TEST_TOKEN'));
  }finally{await rm(f.directory,{recursive:true,force:true})}
 });
