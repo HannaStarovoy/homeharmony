@@ -7,9 +7,9 @@ import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 import sharp from 'sharp';
 
-async function fixture(knownCategory=true){
+async function fixture(knownCategory=true,imageFailure=false){
  const directory=await mkdtemp(join(tmpdir(),'homeharmony-prepare-cli-'));
- const image=await sharp({create:{width:32,height:24,channels:3,background:'#cc9900'}}).png().toBuffer();
+ const image=imageFailure?Buffer.from('<html>PRIVATE_IMAGE_BODY</html>'):await sharp({create:{width:32,height:24,channels:3,background:'#cc9900'}}).png().toBuffer();
  const script='#!'+process.execPath+'\n'+`
 const fs=require('node:fs');
 const config=fs.readFileSync(0,'utf8');
@@ -52,5 +52,16 @@ test('unmapped categories fail without a partial output bundle or source details
   const diagnostic=JSON.parse(await readFile(f.output+'.diagnostic.json','utf8'));
   assert.equal(diagnostic.categoryId,998123);assert.deepEqual(diagnostic.path,['Unmapped synthetic category']);
   assert(!JSON.stringify(diagnostic).includes('Synthetic card'));assert(!JSON.stringify(diagnostic).includes('FICTIONAL_PREPARE_TEST_TOKEN'));
+ }finally{await rm(f.directory,{recursive:true,force:true})}
+});
+test('failed source photos keep only the approved five-record review in a private diagnostic artifact',async()=>{
+ const f=await fixture(true,true);
+ try{
+  const result=f.run();assert.equal(result.status,1);assert.match(result.stderr,/INVALID_IMAGE/);assert(!result.stderr.includes('Synthetic card'));
+  const diagnostic=JSON.parse(await readFile(f.output+'.diagnostic.json','utf8'));
+  assert.equal(diagnostic.kind,'image-preparation');assert.equal(diagnostic.records.length,5);assert.equal(diagnostic.imageJobs.length,5);
+  assert.equal(diagnostic.imageDiagnostic.format,'html');
+  assert(!JSON.stringify(diagnostic).includes('PRIVATE_IMAGE_BODY'));assert(!JSON.stringify(diagnostic).includes('FICTIONAL_PREPARE_TEST_TOKEN'));
+  assert.equal(await stat(f.output).then(()=>true,()=>false),false);
  }finally{await rm(f.directory,{recursive:true,force:true})}
 });

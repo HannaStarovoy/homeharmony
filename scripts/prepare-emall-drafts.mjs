@@ -9,7 +9,7 @@ import {prepareEmallImages,EmallMediaError} from '../server/emall-media.mjs';
 import {openStore,root} from '../server/store.mjs';
 import {loadDraftBundle} from '../server/draft-bundle.mjs';
 
-let staging,tempDatabase,store,output=resolve(root,'var/emall-prepared');
+let staging,tempDatabase,store,preparedReview,output=resolve(root,'var/emall-prepared');
 try{
  const args=process.argv.slice(2);
  for(let i=0;i<args.length;i++){
@@ -23,6 +23,7 @@ try{
  let categoryMap={};try{categoryMap=JSON.parse(await readFile(join(root,'data/emall-category-map.json'),'utf8'))}catch(error){if(error.code!=='ENOENT')throw new Error('CATEGORY_MAP_INVALID')}
  const prepared=await prepareEmallRecords(createEmallClient(),{limit:5,categories,categoryMap});
  if(prepared.records.length!==5)throw new Error('EXPECTED_FIVE_PRODUCTS');
+ preparedReview=prepared;
  const photos=await prepareEmallImages(prepared.imageJobs,{directory:staging});
  for(const product of prepared.records)product.images=photos.imagesByExternalId[product.externalId]||[];
  const manifest={version:1,source:{provider:'emall',environment:'production',account:'homeharmony-emall-main'},products:prepared.records,media:photos.media};
@@ -45,11 +46,17 @@ try{
  if(Number.isSafeInteger(error.categoryId))report.categoryId=error.categoryId;
  if(known&&typeof error.hostname==='string'&&/^[a-z0-9.-]+$/i.test(error.hostname))report.hostname=error.hostname;
  if(known&&Number.isInteger(error.status))report.status=error.status;
+ if(error instanceof EmallMediaError&&error.imageDiagnostic)report.imageDiagnostic=error.imageDiagnostic;
  if(error instanceof EmallAdapterError&&error.code==='CATEGORY_UNMAPPED'&&error.categoryReview){
   const value=JSON.stringify(error.categoryReview,null,2),token=process.env.EMALL_API_TOKEN;
   const redacted=token?value.split(token).join('[redacted]'):value;
   await mkdir(dirname(output),{recursive:true});
   await writeFile(output+'.diagnostic.json',redacted+'\n','utf8');
+ }
+ if(error instanceof EmallMediaError&&preparedReview){
+  const value=JSON.stringify({kind:'image-preparation',records:preparedReview.records,imageJobs:preparedReview.imageJobs,warnings:preparedReview.warnings,imageDiagnostic:error.imageDiagnostic??null},null,2);
+  const token=process.env.EMALL_API_TOKEN,redacted=token?value.split(token).join('[redacted]'):value;
+  await mkdir(dirname(output),{recursive:true});await writeFile(output+'.diagnostic.json',redacted+'\n','utf8');
  }
  console.error(JSON.stringify(report));process.exitCode=1;
 }finally{

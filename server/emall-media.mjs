@@ -8,6 +8,14 @@ import {join,resolve} from 'node:path';
 import sharp from 'sharp';
 
 const MAX_BYTES=8*1024*1024,MAX_PIXELS=25_000_000,MAX_PHOTOS=8,MAX_REDIRECTS=4;
+const IMAGE_REASONS=new Set(['unsupported-format','pixel-limit','animated','decode-failed']);
+const IMAGE_FORMATS=new Set(['jpeg','png','webp','heif','avif','gif','tiff','svg','html','json','unknown']);
+const IMAGE_STAGES=new Set(['metadata','decode','validation']);
+const boundedInteger=(value,max)=>Number.isSafeInteger(value)&&value>0&&value<=max?value:null;
+function safeImageDiagnostic(value){
+ if(!value||typeof value!=='object'||!IMAGE_REASONS.has(value.reason)||!IMAGE_STAGES.has(value.stage))return null;
+ return {reason:value.reason,format:IMAGE_FORMATS.has(value.format)?value.format:'unknown',width:boundedInteger(value.width,MAX_PIXELS),height:boundedInteger(value.height,MAX_PIXELS),pages:boundedInteger(value.pages,MAX_PIXELS),bytes:Number.isSafeInteger(value.bytes)&&value.bytes>=0&&value.bytes<=MAX_BYTES?value.bytes:null,stage:value.stage};
+}
 const PUBLIC_SUFFIXES=['emall.by','edostavka.by'];
 const PUBLIC_HOSTS=new Set(['cdn.ime.by']);
 const MESSAGES={
@@ -24,11 +32,13 @@ const MESSAGES={
 };
 const safeHostname=value=>typeof value==='string'&&value.length<=253&&/^(?:[a-z0-9](?:[a-z0-9-]*[a-z0-9])?\.)+[a-z]{2,63}$/.test(value)?value:null;
 export class EmallMediaError extends Error{
- constructor(code,{status=null,hostname=null}={}){
+ constructor(code,{status=null,hostname=null,imageDiagnostic=null}={}){
   const safeCode=Object.hasOwn(MESSAGES,code)?code:'INVALID_RESPONSE';
   super(MESSAGES[safeCode]);this.name='EmallMediaError';this.code=safeCode;
   this.status=Number.isInteger(status)&&status>=100&&status<=599?status:null;
   if(safeCode==='HOST_NOT_ALLOWED'&&safeHostname(hostname))this.hostname=hostname;
+  const diagnostic=safeImageDiagnostic(imageDiagnostic);
+  if(safeCode==='INVALID_IMAGE'&&diagnostic)this.imageDiagnostic=diagnostic;
  }
 }
 const failure=(code,details)=>new EmallMediaError(code,details);
@@ -111,7 +121,7 @@ async function downloadImage(url,transport,downloads){
   if(downloads.has(current))return {photo:downloads.get(current),urls:[...visited]};
   let response;
   try{response=await transport({url:current,headers:{Accept:'image/jpeg,image/png,image/webp'}})}
-  catch(error){throw error instanceof EmallMediaError?failure(error.code,{status:error.status,hostname:error.hostname}):failure('NETWORK')}
+  catch(error){throw error instanceof EmallMediaError?failure(error.code,{status:error.status,hostname:error.hostname,imageDiagnostic:error.imageDiagnostic}):failure('NETWORK')}
   if(!record(response)||!Number.isInteger(response.status)||response.status<100||response.status>599||!Buffer.isBuffer(response.body))throw failure('INVALID_RESPONSE');
   if(response.body.length>MAX_BYTES)throw failure('IMAGE_TOO_LARGE');
   if([301,302,303,307,308].includes(response.status)){
@@ -121,28 +131,61 @@ async function downloadImage(url,transport,downloads){
    continue;
   }
   if(response.status!==200)throw failure('HTTP_ERROR',{status:response.status});
-  if(!response.body.length)throw failure('INVALID_IMAGE');
+  if(!response.body.length)throw failure('INVALID_IMAGE',{imageDiagnostic:{reason:'decode-failed',format:'unknown',bytes:0,stage:'metadata'}});
   return {input:response.body,urls:[...visited]};
  }
 }
 
+function imageFormat(input){
+ if(input.length>=3&&input[0]===0xff&&input[1]===0xd8&&input[2]===0xff)return 'jpeg';
+ if(input.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10])))return 'png';
+ if(input.toString('ascii',0,4)==='RIFF'&&input.toString('ascii',8,12)==='WEBP')return 'webp';
+ if(/^GIF8[79]a$/.test(input.toString('ascii',0,6)))return 'gif';
+ if(['49492a00','4d4d002a','49492b00','4d4d002b'].includes(input.subarray(0,4).toString('hex')))return 'tiff';
+ if(input.length>=16&&input.toString('ascii',4,8)==='ftyp'){
+  const brands=[];
+  for(let offset=8;offset+4<=Math.min(input.readUInt32BE(0),input.length,64);offset+=4)if(offset!==12)brands.push(input.toString('ascii',offset,offset+4));
+  if(brands.some(brand=>['avif','avis'].includes(brand)))return 'avif';
+  if(brands.some(brand=>['heic','heix','hevc','hevx','heim','heis','mif1','msf1'].includes(brand)))return 'heif';
+ }
+ const prefix=input.subarray(0,512).toString('utf8').replace(/^\uFEFF/,'').trimStart();
+ if(/^(?:<\?xml\b[^>]*>\s*)?<svg\b/i.test(prefix))return 'svg';
+ if(/^<!doctype\s+html\b|^<(?:html|head|body)\b/i.test(prefix))return 'html';
+ if(/^[{\[]/.test(prefix))return 'json';
+ return 'unknown';
+}
+function imageErrorReason(error){
+ const message=typeof error?.message==='string'?error.message:'';
+ if(/pixel limit|exceeds? (?:the )?(?:maximum|limit).*pixels?|image dimensions exceed/i.test(message))return 'pixel-limit';
+ if(/unsupported image format|unsupported input|not a known file format/i.test(message))return 'unsupported-format';
+ return 'decode-failed';
+}
 async function normalizeImage(input){
+ let metadata,stage='metadata';
+ const detectedFormat=imageFormat(input);
+ const diagnostic=reason=>({reason,format:detectedFormat==='avif'&&metadata?.format==='heif'?'avif':metadata?.format||detectedFormat,width:metadata?.width,height:metadata?.height,pages:metadata?.pages,bytes:input.length,stage});
+ const invalid=reason=>failure('INVALID_IMAGE',{imageDiagnostic:diagnostic(reason)});
  try{
-  const metadata=await sharp(input,{limitInputPixels:MAX_PIXELS,failOn:'warning'}).metadata();
-  if(!['jpeg','png','webp'].includes(metadata.format)||(metadata.pages||1)>1||!metadata.width||!metadata.height||metadata.width*metadata.height>MAX_PIXELS)throw failure('INVALID_IMAGE');
+  metadata=await sharp(input,{limitInputPixels:MAX_PIXELS,failOn:'warning'}).metadata();
+  stage='validation';
+  if(!['jpeg','png','webp'].includes(metadata.format))throw invalid('unsupported-format');
+  if((metadata.pages||1)>1)throw invalid('animated');
+  if(!metadata.width||!metadata.height)throw invalid('decode-failed');
+  if(metadata.width*metadata.height>MAX_PIXELS)throw invalid('pixel-limit');
   // libvips can expose only the first APNG frame without reporting pages.
   // Read actual chunk boundaries rather than searching compressed image bytes.
   if(metadata.format==='png'){
    for(let offset=8;offset+12<=input.length;){
     const length=input.readUInt32BE(offset),type=input.toString('ascii',offset+4,offset+8);
-    if(length>input.length-offset-12)throw failure('INVALID_IMAGE');
-    if(['acTL','fcTL','fdAT'].includes(type))throw failure('INVALID_IMAGE');
+    if(length>input.length-offset-12)throw invalid('decode-failed');
+    if(['acTL','fcTL','fdAT'].includes(type))throw invalid('animated');
     offset+=length+12;
     if(type==='IEND')break;
    }
   }
+  stage='decode';
   return await sharp(input,{limitInputPixels:MAX_PIXELS,failOn:'warning'}).rotate().resize({width:2000,height:2000,fit:'inside',withoutEnlargement:true}).webp({quality:85}).toBuffer({resolveWithObject:true});
- }catch{throw failure('INVALID_IMAGE')}
+ }catch(error){throw error instanceof EmallMediaError?error:invalid(imageErrorReason(error))}
 }
 
 async function mediaDirectory(directory){

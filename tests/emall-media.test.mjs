@@ -167,6 +167,53 @@ test('JPEG, PNG and WebP are decoded; SVG, GIF, animations, truncation and overs
  for(const body of invalid)await assert.rejects(prepareEmallImages([job([source('invalid.bin')])],{directory:path,transport:async()=>({status:200,body})}),code('INVALID_IMAGE'));
 });
 
+test('invalid images retain bounded metadata diagnostics without source or decoder details',async t=>{
+ const path=await directory(t),input=await photo(),jpeg=await sharp(input).jpeg().toBuffer();
+ const inspect=async(body,expected)=>{
+  await assert.rejects(prepareEmallImages([job([source('PRIVATE_IMAGE?token=PRIVATE_QUERY')])],{directory:path,transport:async()=>({status:200,body})}),error=>{
+   assert.equal(error.code,'INVALID_IMAGE');
+   assert.deepEqual(Object.keys(error.imageDiagnostic).sort(),['bytes','format','height','pages','reason','stage','width']);
+   assert.deepEqual(error.imageDiagnostic,{width:null,height:null,pages:null,bytes:body.length,...expected});
+   assert(!JSON.stringify(error).includes('PRIVATE'));assert(!error.message.includes('PRIVATE'));return true;
+  });
+ };
+ await inspect(jpeg.subarray(0,-2),{reason:'decode-failed',format:'jpeg',width:40,height:30,stage:'decode'});
+ await inspect(jpeg.subarray(0,12),{reason:'decode-failed',format:'jpeg',stage:'metadata'});
+ await inspect(Buffer.from('<!doctype html><html>PRIVATE_BODY https://private.example/PRIVATE</html>'),{reason:'unsupported-format',format:'html',stage:'metadata'});
+ await inspect(Buffer.from('{"PRIVATE_TOKEN":"PRIVATE_VALUE"}'),{reason:'unsupported-format',format:'json',stage:'metadata'});
+ await inspect(Buffer.from('PRIVATE_UNKNOWN_CONTENT'),{reason:'unsupported-format',format:'unknown',stage:'metadata'});
+ await inspect(await syntheticApng(),{reason:'animated',format:'png',width:2,height:2,stage:'validation'});
+ const raw=Buffer.concat([Buffer.alloc(4*4*3,30),Buffer.alloc(4*4*3,210)]);
+ const animated=await sharp(raw,{raw:{width:4,height:8,channels:3,pageHeight:4}}).webp({loop:0,delay:[100,100]}).toBuffer();
+ await inspect(animated,{reason:'animated',format:'webp',width:4,height:4,pages:2,stage:'validation'});
+ const huge=await sharp({create:{width:5001,height:5000,channels:3,background:'#334455'}}).png().toBuffer();
+ await inspect(huge,{reason:'pixel-limit',format:'png',stage:'metadata'});
+ assert.deepEqual(await readdir(path),[]);
+});
+
+test('unsupported AVIF is identified even when Sharp reports the HEIF container',async t=>{
+ if(!sharp.format.heif?.output?.buffer){t.skip('Sharp has no HEIF/AVIF encoder');return}
+ const path=await directory(t),input=await photo();let body;
+ try{body=await sharp(input).avif().toBuffer()}catch{t.skip('Sharp has no AVIF encoder');return}
+ await assert.rejects(prepareEmallImages([job([source('unsupported.bin')])],{directory:path,transport:async()=>({status:200,body})}),error=>{
+  assert.equal(error.code,'INVALID_IMAGE');
+  assert.deepEqual(error.imageDiagnostic,{reason:'unsupported-format',format:'avif',width:40,height:30,pages:1,bytes:body.length,stage:'validation'});return true;
+ });
+ assert.deepEqual(await readdir(path),[]);
+});
+
+test('transport error diagnostics are copied through a strict bounded field allowlist',async t=>{
+ const path=await directory(t),error=new EmallMediaError('INVALID_IMAGE',{imageDiagnostic:{reason:'decode-failed',format:'jpeg',width:40,height:30,pages:1,bytes:42,stage:'decode',message:'PRIVATE_MESSAGE',body:'PRIVATE_BODY'}});
+ error.imageDiagnostic.url='https://private.example/PRIVATE';error.imageDiagnostic.width=Infinity;error.imageDiagnostic.height=25_000_001;error.imageDiagnostic.pages=-1;error.imageDiagnostic.bytes=8*1024*1024+1;error.imageDiagnostic.format='PRIVATE_FORMAT';
+ await assert.rejects(prepareEmallImages([job([source('private.bin')])],{directory:path,transport:async()=>{throw error}}),wrapped=>{
+  assert.notEqual(wrapped,error);
+  assert.deepEqual(wrapped.imageDiagnostic,{reason:'decode-failed',format:'unknown',width:null,height:null,pages:null,bytes:null,stage:'decode'});
+  assert(!JSON.stringify(wrapped).includes('PRIVATE'));return true;
+ });
+ for(const imageDiagnostic of [{reason:'PRIVATE_REASON',stage:'decode'},{reason:'decode-failed',stage:'PRIVATE_STAGE'}])assert.equal(new EmallMediaError('INVALID_IMAGE',{imageDiagnostic}).imageDiagnostic,undefined);
+ assert.equal(new EmallMediaError('NETWORK',{imageDiagnostic:{reason:'decode-failed',stage:'decode'}}).imageDiagnostic,undefined);
+});
+
 test('media writes cannot follow a media directory or content filename symlink',async t=>{
  const path=await directory(t),outside=await directory(t),input=await photo();
  await symlink(outside,join(path,'media'),'dir');
