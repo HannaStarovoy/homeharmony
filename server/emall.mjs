@@ -17,8 +17,12 @@ const DIAGNOSTIC_FIELDS=new Set(['response','response.status','response.body','r
 const DIAGNOSTIC_EXPECTED=new Set(['object','array','string','nonempty-string','string-or-null','array-or-null','object-or-null-or-empty-array','positive-integer','nonnegative-integer','http-status','JSON','not-false','count-matches-data','consistent-pagination','requested-page','stable-total','stable-page-size','unique-id']);
 const DIAGNOSTIC_ACTUAL=new Set(['missing','null','array','object','string','integer','number','boolean','bigint','symbol','function','non-JSON']);
 function safeDiagnostic(value){
- if(value===null||typeof value!=='object'||Array.isArray(value)||!DIAGNOSTIC_FIELDS.has(value.field)||!DIAGNOSTIC_EXPECTED.has(value.expected)||!DIAGNOSTIC_ACTUAL.has(value.actual))return null;
- return Object.freeze({field:value.field,expected:value.expected,actual:value.actual});
+ if(value===null||typeof value!=='object'||Array.isArray(value))return null;
+ try{
+  const {field,expected,actual}=value;
+  if(!DIAGNOSTIC_FIELDS.has(field)||!DIAGNOSTIC_EXPECTED.has(expected)||!DIAGNOSTIC_ACTUAL.has(actual))return null;
+  return Object.freeze({field,expected,actual});
+ }catch{return null}
 }
 export class EmallError extends Error{
  constructor(code,status=null,diagnostic=null){

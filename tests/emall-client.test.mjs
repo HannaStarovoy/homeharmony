@@ -164,6 +164,10 @@ test('structural diagnostics reveal fixed paths and types without response value
  for(const key of ['field','expected','actual'])assert.equal(new EmallError('INVALID_RESPONSE',200,{...base,[key]:secret}).diagnostic,null);
  const sanitized=new EmallError('INVALID_RESPONSE',200,{...base,[secret]:secret});
  assert.deepEqual(sanitized.diagnostic,base);assert(!JSON.stringify(sanitized).includes(secret));
+ let reads=0;
+ const changing={...base,get field(){return reads++===0?base.field:secret}};
+ assert.deepEqual(new EmallError('INVALID_RESPONSE',200,changing).diagnostic,base);assert.equal(reads,1);
+ assert.equal(new EmallError('INVALID_RESPONSE',200,{get field(){throw new Error(secret)}}).diagnostic,null);
  assert.equal(new EmallError('NETWORK').diagnostic,null);
  await assert.rejects(client(async()=>{const error=new EmallError('INVALID_RESPONSE',200);error.diagnostic={...base,field:secret};throw error}).listProducts(),error=>error.diagnostic===null&&!JSON.stringify(error).includes(secret));
 });
