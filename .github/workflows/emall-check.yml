@@ -1,0 +1,31 @@
+name: Проверить Emall API
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  check-catalog:
+    name: Чтение первых пяти товаров
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Получить код магазина
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Подготовить Node.js
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '24.19.0'
+
+      - name: Проверить клиент на искусственных данных
+        run: node --test tests/emall-client.test.mjs tests/emall-cli.test.mjs
+
+      - name: Проверить чтение каталога Emall
+        env:
+          EMALL_API_TOKEN: ${{ secrets.EMALL_API_TOKEN }}
+        run: node scripts/check-emall.mjs --summary
