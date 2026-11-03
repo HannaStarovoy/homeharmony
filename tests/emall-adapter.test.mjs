@@ -134,6 +134,17 @@ test('explicit category ID overrides use an existing approved category only',asy
  const extended=[...categories,{id:'new-root',name:'Новый раздел',parent:'all'}];
  await assert.rejects(prepareEmallRecords(client([raw]),{categories:extended,categoryMap:{999:'new-root'}}),code('INVALID_CONFIG'));
 });
+test('all selected unmapped categories are reviewed before property requests or partial records',async()=>{
+ let propertyCalls=0;
+ const raw=[{...card(1),category_id:888,name:'PRIVATE_PRODUCT_ONE'},{...card(2),category_id:999,name:'PRIVATE_PRODUCT_TWO'}];
+ const instance=client(raw,{tree:[{id:888,name:'Первый новый раздел'},{id:999,name:'Второй новый раздел'}]});
+ instance.getCategoryProperties=async()=>{propertyCalls++;return {properties:[]}};
+ await assert.rejects(prepare(instance),error=>{
+  assert.equal(error.code,'CATEGORY_UNMAPPED');assert.deepEqual(error.categoryReview.unmapped,[{categoryId:888,path:['Первый новый раздел']},{categoryId:999,path:['Второй новый раздел']}]);
+  assert(!JSON.stringify(error.categoryReview).includes('PRIVATE_PRODUCT'));return true;
+ });
+ assert.equal(propertyCalls,0);
+});
 test('documented Продукты root maps to food, with deepest approved path match preferred',async()=>{
  const tree=[{id:20,name:'Продукты',children:[{id:21,name:'Сладости',children:[{id:22,name:'Шоколад'}]},{id:23,name:'Молоко'}]}];
  const result=await prepare(client([{...card(1),category_id:22},{...card(2),category_id:23}],{tree}));

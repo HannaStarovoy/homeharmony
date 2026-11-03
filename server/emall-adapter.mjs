@@ -158,14 +158,25 @@ export async function prepareEmallRecords(client,{limit=5,categories,categoryMap
   const result=await client.getCatalogCategories();
   categoryPaths=sourceCategoryPaths(Array.isArray(result)?result:result?.categories);
  }catch(error){dictionaryError=dictionaryFailure(error);warn('CATEGORY_DICTIONARY_UNAVAILABLE')}
- const dictionaryCache=new Map();
- for(const product of products){
-  const externalId=String(product.id),detail={externalId},categoryId=sourceInteger(product.category_id,1);
-  if(categoryId===null)throw categoryUnmapped(null,[],dictionaryError);
-  const mapped=overrides.get(categoryId)??null;
+ const selections=products.map(product=>{
+  const categoryId=sourceInteger(product.category_id,1);
   const path=categoryPaths.get(categoryId)??(typeof product.category_name==='string'?[product.category_name]:[]);
-  const cat=mapped??matchCategory(path,catalog);
-  if(!cat)throw categoryUnmapped(categoryId,path,dictionaryError);
+  return {categoryId,path,cat:categoryId===null?null:overrides.get(categoryId)??matchCategory(path,catalog)};
+ });
+ const unmapped=selections.filter(item=>!item.cat);
+ if(unmapped.length){
+  const error=categoryUnmapped(unmapped[0].categoryId,unmapped[0].path,dictionaryError);
+  const unique=[...new Map(unmapped.map(item=>[item.categoryId,item])).values()];
+  if(unique.length>1)error.categoryReview.unmapped=unique.slice(0,5).map(item=>{
+   const reviewed=categoryUnmapped(item.categoryId,item.path,null).categoryReview;
+   return {categoryId:reviewed.categoryId,path:reviewed.path};
+  });
+  throw error;
+ }
+ const dictionaryCache=new Map();
+ for(const [index,product] of products.entries()){
+  const externalId=String(product.id),detail={externalId},categoryId=sourceInteger(product.category_id,1);
+  const cat=selections[index].cat;
   const kopecks=sourceInteger(product.prices?.price,1,100_000_000);
   if(kopecks===null)throw new EmallAdapterError('PRICE_REQUIRED');
   const stock=sourceInteger(product.stock,0,1_000_000);
