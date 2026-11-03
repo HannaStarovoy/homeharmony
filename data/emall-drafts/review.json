@@ -1,0 +1,80 @@
+{
+  "warnings": [
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9366858"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9366858"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9366858"
+    },
+    {
+      "code": "OLD_PRICE_RESET",
+      "externalId": "9366859"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9366859"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9366859"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9366859"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9380065"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9380065"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9380066"
+    },
+    {
+      "code": "PROPERTY_UNRESOLVED",
+      "externalId": "9380066"
+    },
+    {
+      "externalId": "9366858",
+      "code": "SOURCE_PHOTO_SKIPPED",
+      "photoIndex": 0,
+      "reason": "INVALID_IMAGE",
+      "status": null,
+      "imageDiagnostic": {
+        "reason": "unsupported-format",
+        "format": "html",
+        "width": null,
+        "height": null,
+        "pages": null,
+        "bytes": 146,
+        "stage": "metadata"
+      }
+    },
+    {
+      "externalId": "9366859",
+      "code": "SOURCE_PHOTO_SKIPPED",
+      "photoIndex": 0,
+      "reason": "INVALID_IMAGE",
+      "status": null,
+      "imageDiagnostic": {
+        "reason": "unsupported-format",
+        "format": "html",
+        "width": null,
+        "height": null,
+        "pages": null,
+        "bytes": 146,
+        "stage": "metadata"
+      }
+    }
+  ]
+}
