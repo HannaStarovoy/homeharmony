@@ -1,0 +1,22 @@
+{
+  "name": "homeharmony",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "scripts": {
+    "start": "node --env-file-if-exists=.env.local server/main.mjs",
+    "dev": "node --env-file-if-exists=.env.local --watch server/main.mjs",
+    "admin:create": "node --env-file-if-exists=.env.local scripts/admin-user.mjs",
+    "test": "node --test tests/server.test.mjs",
+    "test:ui": "node tests/catalog.cjs && node tests/product.cjs && node tests/admin.cjs"
+  },
+  "dependencies": {
+    "sharp": "0.35.5"
+  },
+  "devDependencies": {
+    "playwright": "1.62.1"
+  }
+}

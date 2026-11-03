@@ -1,0 +1,11 @@
+node_modules/
+.env
+.env.*
+!.env.example
+var/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+coverage/
+playwright-report/
+test-results/

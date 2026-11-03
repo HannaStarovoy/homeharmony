@@ -1,13 +1,14 @@
 // Run: node tests/product.cjs (Playwright + Chromium).
 const {chromium}=require('playwright');
 const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const seed=fs.readFileSync(require('node:path').join(__dirname,'../catalog-data.js'),'utf8');
 const html=fs.readFileSync(path.join(__dirname,'../index.html'),'utf8');
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  try{
   const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];
   page.on('pageerror',e=>errors.push(e.message));
-  await page.route('http://shop.test/**',r=>r.fulfill({contentType:'text/html',body:html}));
+  await page.route('http://shop.test/**',r=>r.fulfill({contentType:'text/html',body:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:html}));
   const open=async(id,sku='')=>page.goto(`http://shop.test/?view=product&product=${id}${sku?'&sku='+sku:''}`);
   const option=(key,value)=>page.locator(`[data-option="${key}"][data-value="${value}"]`);
   const add=()=>page.locator('.buy-row [data-add]');
