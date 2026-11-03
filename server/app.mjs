@@ -6,9 +6,10 @@ import sharp from 'sharp';
 import { openStore, root, Problem } from './store.mjs';
 import { login, session } from './auth.mjs';
 import { templates } from './schema.mjs';
+import { deliveries } from './orders.mjs';
 
-export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=process.env.NODE_ENV==='production'}={}) {
-  const store=openStore(dataDir);
+export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=process.env.NODE_ENV==='production',reserveHours}={}) {
+  const store=openStore(dataDir,{...(reserveHours===undefined?{}:{reserveHours})});
   const cookie=(token,maxAge)=>`shop_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secureCookies?'; Secure':''}`;
   if (origin && (!/^https?:\/\//.test(origin) || new URL(origin).origin!==origin)) throw new Error('SHOP_ORIGIN must be a complete origin without a trailing slash or path.');
   if (process.env.NODE_ENV==='production' && (!origin?.startsWith('https://') || !secureCookies)) throw new Error('Production requires an HTTPS SHOP_ORIGIN and secure cookies.');
@@ -42,6 +43,11 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
       if (!['GET','HEAD','POST','PUT'].includes(req.method)) throw new Problem(405,'Метод не поддерживается.');
       if (['POST','PUT'].includes(req.method) && req.headers.origin!==base) throw new Problem(403,'Обновите страницу перед отправкой данных.');
       const user=session(store,req);
+      if(path==='/api/orders'&&req.method==='POST'){
+        const result=store.orders.create(await jsonBody(req),req.headers['idempotency-key'],req.socket.remoteAddress);
+        return send(res,result.replayed?200:201,result.receipt);
+      }
+      if(path==='/api/orders/receipt'&&req.method==='GET')return send(res,200,store.orders.findReceipt(req.headers['idempotency-key']));
       if (path==='/api/admin/login' && req.method==='POST') {
         const credentials=await jsonBody(req);
         if(!credentials||typeof credentials!=='object'||Array.isArray(credentials))throw new Problem(400,'Неверные данные входа.');
@@ -57,6 +63,10 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
           store.db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);
           res.setHeader('Set-Cookie',cookie('',0));return send(res,200,{ok:true});
         }
+        if(path==='/api/admin/orders'&&req.method==='GET')return send(res,200,store.orders.list({status:url.searchParams.get('status')||'all',search:url.searchParams.get('q')||'',page:url.searchParams.get('page')||1}));
+        const orderMatch=path.match(/^\/api\/admin\/orders\/([1-9]\d{0,12})$/);
+        if(orderMatch&&req.method==='GET')return send(res,200,store.orders.detail(Number(orderMatch[1])));
+        if(orderMatch&&req.method==='PUT')return send(res,200,store.orders.update(Number(orderMatch[1]),await jsonBody(req),user.email));
         if (path==='/api/admin/catalog' && req.method==='GET') return send(res,200,{categories:store.categories(),products:store.products(),templates});
         if (path==='/api/admin/products' && req.method==='POST') return send(res,201,store.saveProduct(await jsonBody(req)));
         const match=path.match(/^\/api\/admin\/products\/([a-zA-Z0-9-]+)$/);
@@ -79,7 +89,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
       if (req.method!=='GET' && req.method!=='HEAD') throw new Problem(405,'Метод не поддерживается.');
       if (path==='/api/health') return send(res,200,{ok:true});
       if (path==='/api/catalog' || path==='/catalog-data.js') {
-        const data={categories:store.categories(),products:store.products(true)};
+        const data={categories:store.categories(),products:store.products(true),orderingEnabled:true,checkout:{deliveries,reserveHours:store.orders.reserveHours}};
         if(path==='/api/catalog')return send(res,200,data);
         const encoded=JSON.stringify(data).replace(/[<>&\u2028\u2029]/g,c=>'\\u'+c.charCodeAt(0).toString(16).padStart(4,'0'));
         return send(res,200,'window.catalogData = '+encoded+';','application/javascript; charset=utf-8');
@@ -99,7 +109,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
     } catch(error) {
       if (res.headersSent) {res.destroy();return}
       if (!(error instanceof Problem)) console.error('Request failed:',error.code||error.name);
-      send(res,error.status||500,{message:error instanceof Problem?error.message:'Не удалось выполнить операцию. Попробуйте ещё раз.',...(error.field?{field:error.field}:{})});
+      send(res,error.status||500,{message:error instanceof Problem?error.message:'Не удалось выполнить операцию. Попробуйте ещё раз.',...(error.field?{field:error.field}:{}),...(error instanceof Problem&&error.code?{code:error.code}:{})});
     }
   });
   server.requestTimeout=30_000;

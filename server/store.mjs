@@ -3,13 +3,13 @@ import { readFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
+import { Problem } from './errors.mjs';
+import { createOrderStore } from './orders.mjs';
+export { Problem } from './errors.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
-export class Problem extends Error {
-  constructor(status, message, field) { super(message); this.status = status; this.field = field; }
-}
 const json = value => JSON.stringify(value);
-export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var')) {
+export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var'), {reserveHours=Number(process.env.SHOP_RESERVE_HOURS||24)}={}) {
   dataDir = resolve(dataDir);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const uploadDir = join(dataDir, 'uploads');
@@ -55,14 +55,16 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       db.exec('COMMIT');
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
+  const orders=createOrderStore(db,{reserveHours});
   const categories = () => db.prepare('SELECT id,name,parent FROM categories ORDER BY rowid').all().map(c => ({...c}));
   function products(publishedOnly = false) {
+    orders.expire();
     const rows = db.prepare(`SELECT * FROM products ${publishedOnly ? "WHERE status='published'" : ''} ORDER BY date_rank DESC, id`).all();
     const variants = db.prepare('SELECT * FROM variants ORDER BY position').all();
     const byProduct = new Map();
     for (const v of variants) {
       if (!byProduct.has(v.product_id)) byProduct.set(v.product_id, []);
-      byProduct.get(v.product_id).push({sku:v.sku,name:v.name,options:JSON.parse(v.options),price:v.price_cents/100,old:v.old_cents/100,stock:v.stock,color:v.color,images:JSON.parse(v.images)});
+      byProduct.get(v.product_id).push({sku:v.sku,name:v.name,options:JSON.parse(v.options),price:v.price_cents/100,old:v.old_cents/100,stock:publishedOnly?Math.max(0,v.stock-orders.reserved(v.sku)):v.stock,...(publishedOnly?{}:{reserved:orders.reserved(v.sku),available:Math.max(0,v.stock-orders.reserved(v.sku))}),color:v.color,images:JSON.parse(v.images)});
     }
     return rows.map(p => {
       const list = byProduct.get(p.id) || [];
@@ -71,6 +73,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     });
   }
   function saveProduct(input, id) {
+    orders.expire();
     const value = validateProduct(input, categories(), db);
     db.exec('BEGIN IMMEDIATE');
     try {
@@ -82,15 +85,26 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
         const owner = db.prepare('SELECT product_id FROM variants WHERE sku=?').get(v.sku);
         if (owner && owner.product_id !== productId) throw new Problem(409, `Артикул ${v.sku} уже используется другим товаром.`, 'variants');
       }
+      if(current){
+        const existing=db.prepare('SELECT sku,options FROM variants WHERE product_id=?').all(productId);
+        for(const old of existing){
+          const hold=orders.reserved(old.sku),replacement=value.variants.find(v=>v.sku===old.sku);
+          if(hold&&!replacement)throw new Problem(409,'Нельзя удалить вариант: он зарезервирован в заказе.');
+          if(replacement&&replacement.stock<hold)throw new Problem(409,`Физический остаток ${old.sku} не может быть меньше резерва (${hold} шт.).`);
+          const canonical=object=>JSON.stringify(Object.keys(object).sort().map(k=>[k,object[k]]));
+          if(hold&&canonical(JSON.parse(old.options))!==canonical(replacement.options))throw new Problem(409,'Нельзя менять параметры SKU, пока по нему есть резерв.');
+        }
+      }
       if (current) {
         db.prepare('UPDATE products SET name=?,category_id=?,summary=?,attrs=?,images=?,status=?,version=version+1,updated_at=? WHERE id=?')
           .run(value.name,value.cat,value.summary,json(value.attrs),json(value.images),value.status,new Date().toISOString(),productId);
-        db.prepare('DELETE FROM variants WHERE product_id=?').run(productId);
+        const keep=new Set(value.variants.map(v=>v.sku));
+        for(const row of db.prepare('SELECT sku FROM variants WHERE product_id=?').all(productId))if(!keep.has(row.sku))db.prepare('DELETE FROM variants WHERE sku=?').run(row.sku);
       } else {
         db.prepare('INSERT INTO products(id,name,category_id,summary,attrs,images,status,date_rank,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
           .run(productId,value.name,value.cat,value.summary,json(value.attrs),json(value.images),value.status,Date.now(),new Date().toISOString());
       }
-      value.variants.forEach((v,i)=>db.prepare('INSERT INTO variants VALUES(?,?,?,?,?,?,?,?,?,?)').run(v.sku,productId,v.name,json(v.options),v.priceCents,v.oldCents,v.stock,v.color,json(v.images),i));
+      value.variants.forEach((v,i)=>db.prepare('INSERT INTO variants VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(sku) DO UPDATE SET name=excluded.name,options=excluded.options,price_cents=excluded.price_cents,old_cents=excluded.old_cents,stock=excluded.stock,color=excluded.color,images=excluded.images,position=excluded.position').run(v.sku,productId,v.name,json(v.options),v.priceCents,v.oldCents,v.stock,v.color,json(v.images),i));
       db.exec('COMMIT');
       return products().find(p=>p.id===productId);
     } catch (error) { db.exec('ROLLBACK'); throw error; }
@@ -100,7 +114,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       UNION ALL SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id,json_each(v.images) i
       WHERE p.status='published' AND i.value=? LIMIT 1`).get(url,url);
   }
-  return { db, dataDir, uploadDir, categories, products, saveProduct, isPublicMedia, close:()=>db.close() };
+  return { db, dataDir, uploadDir, categories, products, saveProduct, isPublicMedia, orders, close:()=>db.close() };
 }
 
 function text(value, label, max, required = false) {
