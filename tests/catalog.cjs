@@ -2,12 +2,13 @@
 const {chromium}=require('playwright');
 const fs=require('node:fs');
 const assert=require('node:assert/strict');
+const css=fs.readFileSync(require('node:path').join(__dirname,'../storefront.css'),'utf8');
 const seed=fs.readFileSync(require('node:path').join(__dirname,'../catalog-data.js'),'utf8');
 const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),'utf8');
 (async()=>{
  const browser=await chromium.launch({executablePath:process.env.CHROMIUM_PATH||'/usr/bin/chromium',headless:true,args:['--no-sandbox']});
  const page=await browser.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
- await page.route('http://shop.test/**',r=>r.fulfill({contentType:'text/html',body:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:html}));
+ await page.route('http://shop.test/**',r=>r.fulfill({contentType:new URL(r.request().url()).pathname==='/storefront.css'?'text/css':'text/html',body:new URL(r.request().url()).pathname==='/storefront.css'?css:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:html}));
  await page.goto('http://shop.test/?view=catalog');
  const cards=()=>page.locator('.catalog-results .product-card');
  assert.equal(await cards().count(),12);
@@ -89,7 +90,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  // A separate in-memory fixture exercises pagination at the intended catalog size.
  const fixture=`const originals=products.slice();for(let i=products.length;i<500;i++){const p=originals[i%originals.length];products.push({...p,id:p.id+'-test-'+i,name:p.name+' '+i,price:200+i,attrs:{...p.attrs},variants:p.variants.map(v=>({...v,price:200+i}))})}`;
  const large=html.replace('const skuPrice=',fixture+'\nconst skuPrice=');
- await page.unroute('http://shop.test/**');await page.route('http://shop.test/**',r=>r.fulfill({contentType:'text/html',body:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:large}));
+ await page.unroute('http://shop.test/**');await page.route('http://shop.test/**',r=>r.fulfill({contentType:new URL(r.request().url()).pathname==='/storefront.css'?'text/css':'text/html',body:new URL(r.request().url()).pathname==='/storefront.css'?css:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:large}));
  await page.goto('http://shop.test/?view=catalog&sort=price-asc');
  assert.equal(await cards().count(),12);assert.match(await page.locator('.catalog-toolbar [role="status"]').innerText(),/500/);
  const first=await cards().first().innerText();
