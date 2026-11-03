@@ -47,3 +47,16 @@ test('missing GitHub secret produces a useful failure summary without a live req
   const summary=await readFile(summaryFile,'utf8');assert.match(summary,/Проверка не завершена/);assert.match(summary,/Secrets репозитория/);
  }finally{await rm(dir,{recursive:true,force:true})}
 });
+test('schema failure reports only a fixed field path and type, never response values or keys',async()=>{
+ const dir=await mkdtemp(join(tmpdir(),'homeharmony-github-schema-'));
+ const fake='PRIVATE_REFLECTED_TEST_TOKEN';
+ const body=JSON.stringify({data:[{id:fake,name:'PRIVATE_SOURCE_NAME',properties:{[fake]:fake}}],meta:{total:1,count:1,per_page:5,current_page:1,total_pages:1},message:fake});
+ try{
+  await writeFile(join(dir,'curl'),'#!'+process.execPath+'\nprocess.stdout.write('+JSON.stringify(body+'\n200')+');\n',{mode:0o700});
+  const summaryFile=join(dir,'summary.md');
+  const result=run(['--summary'],{EMALL_API_TOKEN:fake,PATH:dir+delimiter+process.env.PATH,GITHUB_STEP_SUMMARY:summaryFile});
+  assert.equal(result.status,1);assert.equal(result.stdout,'');
+  const summary=await readFile(summaryFile,'utf8');assert.match(summary,/data\[\]\.id/);assert.match(summary,/string/);
+  for(const secret of [fake,'PRIVATE_SOURCE_NAME'])assert(!(result.stderr+summary).includes(secret));
+ }finally{await rm(dir,{recursive:true,force:true})}
+});

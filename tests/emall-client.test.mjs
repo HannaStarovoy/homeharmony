@@ -67,12 +67,59 @@ test('a successful read tolerates absent optional import fields without replacin
 });
 test('nullable old price is preserved and optional source fields are type checked if present',async()=>{
  const raw=card(1);raw.prices.old_price=null;assert.equal((await client(async()=>page([raw])).listProducts()).products[0].prices.old_price,null);
- const edits=[p=>p.id=0,p=>delete p.id,p=>p.name=' ',p=>p.category_id='123',p=>p.images='not an array',p=>p.images=[17],p=>p.properties=[],p=>p.stock=-1,p=>p.stock='3',p=>p.prices.price=20.5,p=>p.prices.price='2000',p=>p.prices.old_price=-5,p=>p.prices=null,p=>p.inner_article=15,p=>p.description={}];
+ const edits=[p=>p.id=0,p=>delete p.id,p=>p.name=' ',p=>p.category_id='invalid',p=>p.images='not an array',p=>p.images=[17],p=>p.properties=[{private:'value'}],p=>p.stock=-1,p=>p.stock=null,p=>p.prices.price=20.5,p=>p.prices.price=null,p=>p.prices.old_price=-5,p=>p.prices=null,p=>p.inner_article=15,p=>p.description={}];
  for(const edit of edits){const row=card(1);edit(row);await assert.rejects(client(async()=>page([row])).listProducts(),errorCode('INVALID_RESPONSE'))}
+});
+test('nullable optional fields and empty attribute arrays are preserved as missing source details',async()=>{
+ for(const properties of [null,[]]){
+  const raw={...card(1),category_id:null,inner_article:null,description:null,images:null,properties};
+  const result=await client(async()=>page([raw])).listProducts();
+  assert.deepEqual(result.products,[raw]);assert.equal(result.products[0].stock,3);assert.equal(result.products[0].prices.price,2000);
+ }
+});
+test('complete safe decimal integer strings are accepted without rewriting product fields',async()=>{
+ const raw={...card('0001'),category_id:'123',stock:'0',prices:{price:'2000',old_price:'2100'}};
+ const payload={data:[raw],meta:{total:'1',count:'1',per_page:'5',current_page:'1',total_pages:'1',last_page:1}};
+ const result=await client(async()=>({status:200,body:JSON.stringify(payload)})).listProducts();
+ assert.deepEqual(result,{environment:'production',products:[raw],pagesRead:1,total:1});
+ assert.equal(result.products[0].stock,'0');assert.equal(result.products[0].prices.price,'2000');
+});
+test('numeric compatibility never coerces missing values, partial strings or unsafe integers into money or stock',async()=>{
+ const malformed=[null,true,false,'',' ',' 3','3 ','+3','-3','3.0','3e0','0x3','3x','9007199254740992',Number.MAX_SAFE_INTEGER+1,3.5,-1,[],{}];
+ for(const value of malformed){
+  for(const field of ['stock','price','old_price']){
+   if(field==='old_price'&&value===null)continue;
+   const raw=card(1);if(field==='stock')raw.stock=value;else raw.prices[field]=value;
+   await assert.rejects(client(async()=>page([raw])).listProducts(),errorCode('INVALID_RESPONSE'));
+  }
+ }
+ for(const value of [0,'0']){
+  const raw=card(1);raw.prices.price=value;
+  await assert.rejects(client(async()=>page([raw])).listProducts(),errorCode('INVALID_RESPONSE'));
+ }
+});
+test('pagination derives omitted count and page totals and accepts a consistent Laravel last_page alias',async()=>{
+ for(const mode of ['last_page','derived','matching-aliases']){
+  let calls=0;
+  const result=await client(async()=>{
+   const current=++calls,payload={data:[card(String(current))],meta:{total:'2',per_page:'1',current_page:String(current)}};
+   if(mode!=='derived')payload.meta.last_page='2';
+   if(mode==='matching-aliases')payload.meta.total_pages=2;
+   return {status:200,body:JSON.stringify(payload)};
+  }).listProducts({limit:2});
+  assert.equal(calls,2);assert.equal(result.total,2);assert.deepEqual(result.products.map(p=>p.id),['1','2']);
+ }
+ const empty=await client(async()=>({status:200,body:JSON.stringify({data:[],meta:{total:'0',per_page:'15',current_page:'1'}})})).listProducts();
+ assert.equal(empty.products.length,0);assert.equal(empty.total,0);
+});
+test('a larger server page is validated and sliced to the local requested limit',async()=>{
+ let calls=0;const data=Array.from({length:15},(_,i)=>card(i+1));
+ const result=await client(async()=>{calls++;return page(data,{total:20,perPage:15})}).listProducts();
+ assert.equal(calls,1);assert.equal(result.products.length,5);assert.deepEqual(result.products,data.slice(0,5));assert.equal(result.total,20);
 });
 test('undocumented envelopes, metadata and non-JSON bodies fail with fixed safe messages',async()=>{
  const good=JSON.parse(page([card(1)]).body);
- const examples=[{},[],{data:[card(1)]},{...good,success:false},{...good,data:{}},{...good,meta:{...good.meta,count:9}},{...good,meta:{...good.meta,total:'1'}}];
+ const examples=[{},[],{data:[card(1)]},{...good,success:false},{...good,data:{}},{...good,meta:{...good.meta,count:9}},{...good,meta:{...good.meta,total:null}}];
  for(const body of examples)await assert.rejects(client(async()=>({status:200,body:JSON.stringify(body)})).listProducts(),errorCode('INVALID_RESPONSE'));
  await assert.rejects(client(async()=>({status:200,body:'<html>'+token+'</html>'})).listProducts(),error=>error.code==='INVALID_RESPONSE'&&!error.message.includes(token));
 });
@@ -81,6 +128,44 @@ test('duplicate IDs within one page and across pages cannot create an endless re
  let calls=0;
  await assert.rejects(client(async()=>{calls++;return page([card(1)],{total:2,current:calls,perPage:1})}).listProducts({limit:2}),errorCode('PAGINATION_ERROR'));
  assert.equal(calls,2);
+});
+test('numeric and digit string forms of the same ID are canonical duplicates',async()=>{
+ await assert.rejects(client(async()=>page([card(1),card('0001')])).listProducts(),errorCode('PAGINATION_ERROR'));
+ let calls=0;
+ await assert.rejects(client(async()=>{calls++;return page([card(calls===1?1:'01')],{total:2,current:calls,perPage:1})}).listProducts({limit:2}),errorCode('PAGINATION_ERROR'));
+ assert.equal(calls,2);
+});
+test('malformed pagination fields and conflicting page count aliases remain rejected',async()=>{
+ const good=JSON.parse(page([card(1)]).body);
+ for(const field of ['total','count','per_page','current_page','total_pages','last_page']){
+  for(const value of [null,'','1.0','1e0',' 1',true,'9007199254740992']){
+   const payload={...good,meta:{...good.meta,[field]:value}};
+   await assert.rejects(client(async()=>({status:200,body:JSON.stringify(payload)})).listProducts(),errorCode('INVALID_RESPONSE'));
+  }
+ }
+ const conflict={...good,meta:{...good.meta,last_page:'2'}};
+ await assert.rejects(client(async()=>({status:200,body:JSON.stringify(conflict)})).listProducts(),errorCode('PAGINATION_ERROR'));
+});
+test('structural diagnostics reveal fixed paths and types without response values or arbitrary keys',async()=>{
+ const secret='PRIVATE-RESPONSE-'+token;
+ const payload={...JSON.parse(page([{...card(1),name:secret,stock:secret,[secret]:secret}]).body),[secret]:{[secret]:secret}};
+ await assert.rejects(client(async()=>({status:200,body:JSON.stringify(payload)})).listProducts(),error=>{
+  assert.equal(error.status,200);
+  assert.deepEqual(error.diagnostic,{field:'data[].stock',expected:'nonnegative-integer',actual:'string'});
+  assert.equal(Object.isFrozen(error.diagnostic),true);
+  assert(!JSON.stringify(error).includes(secret));assert(!String(error.stack).includes(token));
+  return error.code==='INVALID_RESPONSE';
+ });
+ await assert.rejects(client(async()=>({status:200,body:'<html>'+secret+'</html>'})).listProducts(),error=>{
+  assert.equal(error.status,200);assert.deepEqual(error.diagnostic,{field:'response.json',expected:'JSON',actual:'non-JSON'});
+  assert(!JSON.stringify(error).includes(secret));return error.code==='INVALID_RESPONSE';
+ });
+ const base={field:'data[].stock',expected:'nonnegative-integer',actual:'string'};
+ for(const key of ['field','expected','actual'])assert.equal(new EmallError('INVALID_RESPONSE',200,{...base,[key]:secret}).diagnostic,null);
+ const sanitized=new EmallError('INVALID_RESPONSE',200,{...base,[secret]:secret});
+ assert.deepEqual(sanitized.diagnostic,base);assert(!JSON.stringify(sanitized).includes(secret));
+ assert.equal(new EmallError('NETWORK').diagnostic,null);
+ await assert.rejects(client(async()=>{const error=new EmallError('INVALID_RESPONSE',200);error.diagnostic={...base,field:secret};throw error}).listProducts(),error=>error.diagnostic===null&&!JSON.stringify(error).includes(secret));
 });
 test('wrong page numbers, premature empty pages and contradictory page totals stop pagination',async()=>{
  for(const response of [page([card(1)],{current:2,total:2,perPage:1}),page([],{total:6}),{status:200,body:JSON.stringify({data:[card(1)],meta:{total:6,count:1,per_page:5,current_page:1,total_pages:1}})}])await assert.rejects(client(async()=>response).listProducts(),errorCode('PAGINATION_ERROR'));

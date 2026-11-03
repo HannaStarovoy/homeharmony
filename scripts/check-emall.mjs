@@ -30,6 +30,9 @@ try{
  console.log(JSON.stringify(report,null,2));
 }catch(error){
  const message=error instanceof EmallError?(error.code==='TOKEN_MISSING'?'Ключ '+tokenName+' отсутствует. Добавьте его в Secrets репозитория для GitHub Actions или в защищённые настройки рабочего процесса.':error.status===401?'Emall не принял авторизацию (HTTP 401). Проверьте ключ '+tokenName+'.':error.status===403?'Emall отказал в доступе (HTTP 403). Проверьте права ключа на чтение каталога.':error.message):('Неизвестный параметр. Используйте --help.'===error.message||error.message==='Для проверки укажите --limit от 1 до 100.'?error.message:'Проверка Emall не завершена.');
- await githubSummary('## Проверка Emall API\n\nПроверка не завершена.\n\n'+message+'\n\nТовары на сайте не создавались.').catch(()=>{});
+ const diagnostic=error instanceof EmallError?error.diagnostic:null;
+ const detail=diagnostic?'\n\nДиагностика формата:\n\n- Поле: `'+diagnostic.field+'`\n- Ожидается: `'+diagnostic.expected+'`\n- Получен тип: `'+diagnostic.actual+'`\n\nЗначения ответа и ключ не выводятся.':'';
+ await githubSummary('## Проверка Emall API\n\nПроверка не завершена.\n\n'+message+detail+'\n\nТовары на сайте не создавались.').catch(()=>{});
  console.error(message);process.exitCode=1;
+ if(diagnostic)console.error(JSON.stringify({diagnostic}));
 }

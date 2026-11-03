@@ -9,46 +9,95 @@ const MESSAGES={
  NETWORK:'Не удалось выполнить защищённый запрос к Emall.',
  HTTP_ERROR:'Emall вернул ошибку HTTP. Проверьте статус и права доступа ключа.',
  RESPONSE_TOO_LARGE:'Ответ Emall превышает допустимый размер.',
- INVALID_RESPONSE:'Ответ Emall не соответствует документированной схеме.',
+ INVALID_RESPONSE:'Не удалось разобрать формат ответа Emall.',
  PAGINATION_ERROR:'Emall вернул противоречивые страницы или повторяющиеся товары.'
 };
+// Diagnostics contain only fixed schema paths and type labels, never response data or keys.
+const DIAGNOSTIC_FIELDS=new Set(['response','response.status','response.body','response.json','success','data','meta','meta.total','meta.count','meta.per_page','meta.current_page','meta.total_pages','meta.last_page','data[]','data[].id','data[].name','data[].category_id','data[].stock','data[].inner_article','data[].description','data[].images','data[].images[]','data[].properties','data[].prices','data[].prices.price','data[].prices.old_price']);
+const DIAGNOSTIC_EXPECTED=new Set(['object','array','string','nonempty-string','string-or-null','array-or-null','object-or-null-or-empty-array','positive-integer','nonnegative-integer','http-status','JSON','not-false','count-matches-data','consistent-pagination','requested-page','stable-total','stable-page-size','unique-id']);
+const DIAGNOSTIC_ACTUAL=new Set(['missing','null','array','object','string','integer','number','boolean','bigint','symbol','function','non-JSON']);
+function safeDiagnostic(value){
+ if(value===null||typeof value!=='object'||Array.isArray(value)||!DIAGNOSTIC_FIELDS.has(value.field)||!DIAGNOSTIC_EXPECTED.has(value.expected)||!DIAGNOSTIC_ACTUAL.has(value.actual))return null;
+ return Object.freeze({field:value.field,expected:value.expected,actual:value.actual});
+}
 export class EmallError extends Error{
- constructor(code,status=null){
+ constructor(code,status=null,diagnostic=null){
   const safeCode=typeof code==='string'&&Object.hasOwn(MESSAGES,code)?code:'INVALID_RESPONSE';
   super(MESSAGES[safeCode]);this.name='EmallError';this.code=safeCode;
   this.status=Number.isInteger(status)&&status>=100&&status<=599?status:null;
+  this.diagnostic=safeDiagnostic(diagnostic);
  }
 }
-const invalid=()=>{throw new EmallError('INVALID_RESPONSE')};
 const record=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const integer=(value,min=0)=>Number.isSafeInteger(value)&&value>=min;
 const has=(value,key)=>Object.hasOwn(value,key);
+const NON_JSON=Symbol();
+function typeLabel(value){
+ if(value===NON_JSON)return 'non-JSON';
+ if(value===undefined)return 'missing';
+ if(value===null)return 'null';
+ if(Array.isArray(value))return 'array';
+ if(Number.isSafeInteger(value))return 'integer';
+ return typeof value;
+}
+const diagnostic=(field,expected,value)=>({field,expected,actual:typeLabel(value)});
+const invalid=(field,expected,value)=>{throw new EmallError('INVALID_RESPONSE',null,diagnostic(field,expected,value))};
+const pagination=(field,expected,value)=>{throw new EmallError('PAGINATION_ERROR',null,diagnostic(field,expected,value))};
+function sourceInteger(value,min=0){
+ // Accept only complete decimal digit strings; null, blanks, fractions and exponents never become numbers.
+ if(typeof value==='string'){
+  if(!/^\d+$/.test(value))return null;
+  value=Number(value);
+ }
+ return integer(value,min)?value:null;
+}
+function readInteger(value,field,min=0){
+ const parsed=sourceInteger(value,min);
+ if(parsed===null)invalid(field,min===1?'positive-integer':'nonnegative-integer',value);
+ return parsed;
+}
 function validateProduct(product){
- if(!record(product)||!integer(product.id,1)||typeof product.name!=='string'||!product.name.trim())invalid();
+ if(!record(product))invalid('data[]','object',product);
+ readInteger(product.id,'data[].id',1);
+ if(typeof product.name!=='string'||!product.name.trim())invalid('data[].name','nonempty-string',product.name);
  // Preserve fields exactly as read. A valid read is not a publishable/import-ready product.
- if(has(product,'category_id')&&!integer(product.category_id,1))invalid();
- if(has(product,'stock')&&!integer(product.stock))invalid();
- if(has(product,'inner_article')&&typeof product.inner_article!=='string')invalid();
- if(has(product,'description')&&product.description!==null&&typeof product.description!=='string')invalid();
- if(has(product,'images')&&(!Array.isArray(product.images)||product.images.some(value=>typeof value!=='string'||!value)))invalid();
- if(has(product,'properties')&&!record(product.properties))invalid();
+ if(has(product,'category_id')&&product.category_id!==null)readInteger(product.category_id,'data[].category_id',1);
+ if(has(product,'stock'))readInteger(product.stock,'data[].stock');
+ if(has(product,'inner_article')&&product.inner_article!==null&&typeof product.inner_article!=='string')invalid('data[].inner_article','string-or-null',product.inner_article);
+ if(has(product,'description')&&product.description!==null&&typeof product.description!=='string')invalid('data[].description','string-or-null',product.description);
+ if(has(product,'images')&&product.images!==null){
+  if(!Array.isArray(product.images))invalid('data[].images','array-or-null',product.images);
+  for(const value of product.images)if(typeof value!=='string'||!value)invalid('data[].images[]','nonempty-string',value);
+ }
+ if(has(product,'properties')&&product.properties!==null&&!record(product.properties)&&!(Array.isArray(product.properties)&&product.properties.length===0))invalid('data[].properties','object-or-null-or-empty-array',product.properties);
  if(has(product,'prices')){
-  if(!record(product.prices))invalid();
-  if(has(product.prices,'price')&&!integer(product.prices.price,1))invalid();
-  if(has(product.prices,'old_price')&&product.prices.old_price!==null&&!integer(product.prices.old_price))invalid();
+  if(!record(product.prices))invalid('data[].prices','object',product.prices);
+  if(has(product.prices,'price'))readInteger(product.prices.price,'data[].prices.price',1);
+  if(has(product.prices,'old_price')&&product.prices.old_price!==null)readInteger(product.prices.old_price,'data[].prices.old_price');
  }
 }
-function validatePage(payload,page,perPage){
- if(!record(payload)||payload.success===false||!Array.isArray(payload.data)||!record(payload.meta))invalid();
- const meta=payload.meta;
- if(!integer(meta.total)||!integer(meta.count)||!integer(meta.per_page,1)||!integer(meta.current_page,1)||!integer(meta.total_pages))invalid();
- if(meta.count!==payload.data.length||meta.count>meta.per_page||meta.per_page>perPage||meta.total<meta.count)invalid();
- if(meta.current_page!==page)throw new EmallError('PAGINATION_ERROR');
- if(meta.total===0){if(meta.count!==0||page!==1||meta.total_pages>1)invalid()}
+function validatePage(payload,page){
+ if(!record(payload))invalid('response.json','object',payload);
+ if(payload.success===false)invalid('success','not-false',payload.success);
+ if(!Array.isArray(payload.data))invalid('data','array',payload.data);
+ if(!record(payload.meta))invalid('meta','object',payload.meta);
+ const raw=payload.meta,meta={
+  total:readInteger(raw.total,'meta.total'),
+  count:has(raw,'count')?readInteger(raw.count,'meta.count'):payload.data.length,
+  per_page:readInteger(raw.per_page,'meta.per_page',1),
+  current_page:readInteger(raw.current_page,'meta.current_page',1)
+ };
+ const totalPages=has(raw,'total_pages')?readInteger(raw.total_pages,'meta.total_pages'):null;
+ const lastPage=has(raw,'last_page')?readInteger(raw.last_page,'meta.last_page'):null;
+ if(totalPages!==null&&lastPage!==null&&totalPages!==lastPage)pagination('meta.last_page','consistent-pagination',raw.last_page);
+ meta.total_pages=totalPages??lastPage??Math.ceil(meta.total/meta.per_page);
+ if(meta.count!==payload.data.length||meta.count>meta.per_page||meta.total<meta.count)invalid('meta.count','count-matches-data',raw.count);
+ if(meta.current_page!==page)pagination('meta.current_page','requested-page',raw.current_page);
+ if(meta.total===0){if(meta.count!==0||page!==1||meta.total_pages>1)invalid('meta.total_pages','consistent-pagination',totalPages??lastPage)}
  else{
-  if(meta.total_pages<page||meta.total_pages!==Math.ceil(meta.total/meta.per_page))throw new EmallError('PAGINATION_ERROR');
+  if(meta.total_pages<page||meta.total_pages!==Math.ceil(meta.total/meta.per_page))pagination('meta.total_pages','consistent-pagination',totalPages??lastPage);
   const expected=Math.min(meta.per_page,meta.total-(page-1)*meta.per_page);
-  if(meta.count!==expected)throw new EmallError('PAGINATION_ERROR');
+  if(meta.count!==expected)pagination('meta.count','consistent-pagination',raw.count);
  }
  for(const product of payload.data)validateProduct(product);
  return meta;
@@ -102,16 +151,25 @@ export function createEmallClient({token,environment='production',transport=curl
    url.searchParams.set('page',String(page));url.searchParams.set('perPage',String(perPage));
    let response;
    try{response=await transport({url:url.href,headers:{Accept:'application/json',Authorization:'Bearer '+credential}})}
-   catch(error){throw new EmallError(error instanceof EmallError?error.code:'NETWORK',error instanceof EmallError?error.status:null)}
-   if(!record(response)||!integer(response.status,100)||response.status>599)invalid();
+   catch(error){throw new EmallError(error instanceof EmallError?error.code:'NETWORK',error instanceof EmallError?error.status:null,error instanceof EmallError?error.diagnostic:null)}
+   if(!record(response))invalid('response','object',response);
+   if(!integer(response.status,100)||response.status>599)invalid('response.status','http-status',response.status);
    if(response.status!==200)throw new EmallError('HTTP_ERROR',response.status);
-   if(typeof response.body!=='string')invalid();
-   if(Buffer.byteLength(response.body,'utf8')>MAX_RESPONSE_BYTES)throw new EmallError('RESPONSE_TOO_LARGE');
-   let payload;try{payload=JSON.parse(response.body)}catch{invalid()}
-   const meta=validatePage(payload,page,perPage);
-   if(total!==null&&(meta.total!==total||meta.per_page!==actualPerPage))throw new EmallError('PAGINATION_ERROR');
-   for(const product of payload.data){
-    if(seen.has(product.id))throw new EmallError('PAGINATION_ERROR');seen.add(product.id);
+   let payload,meta;
+   try{
+    if(typeof response.body!=='string')invalid('response.body','string',response.body);
+    if(Buffer.byteLength(response.body,'utf8')>MAX_RESPONSE_BYTES)throw new EmallError('RESPONSE_TOO_LARGE');
+    try{payload=JSON.parse(response.body)}catch{invalid('response.json','JSON',NON_JSON)}
+    meta=validatePage(payload,page);
+    if(total!==null&&meta.total!==total)pagination('meta.total','stable-total',payload.meta.total);
+    if(actualPerPage!==null&&meta.per_page!==actualPerPage)pagination('meta.per_page','stable-page-size',payload.meta.per_page);
+    for(const product of payload.data){
+     const id=sourceInteger(product.id,1);
+     if(seen.has(id))pagination('data[].id','unique-id',product.id);
+     seen.add(id);
+    }
+   }catch(error){
+    throw new EmallError(error instanceof EmallError?error.code:'INVALID_RESPONSE',response.status,error instanceof EmallError?error.diagnostic:null);
    }
    products.push(...payload.data.slice(0,limit-products.length));
    pagesRead++;total=meta.total;actualPerPage=meta.per_page;
