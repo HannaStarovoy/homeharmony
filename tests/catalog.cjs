@@ -20,16 +20,16 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.locator('[data-category="hair"]').first().click();
  assert.equal(await cards().count(),4);
  assert.equal(await page.locator('[aria-label^="Цвет:"]').count(),0);
- await page.locator('[data-attribute="Вариант"][value="500 мл"]').check();
+ await page.locator('[data-attribute="Объём"][value="500 мл"]').check();
  assert.equal(await cards().count(),2);
  assert.match(page.url(),/attr/);
  await page.reload();assert.equal(await cards().count(),2);
- assert(await page.locator('[data-attribute="Вариант"][value="500 мл"]').isChecked());
+ assert(await page.locator('[data-attribute="Объём"][value="500 мл"]').isChecked());
  await page.goBack();assert.equal(await cards().count(),4);
  await page.goForward();assert.equal(await cards().count(),2);
  await page.locator('[data-category="hats"]').first().click();
  assert.equal(await cards().count(),4);
- assert.equal(await page.locator('[data-attribute="Вариант"]').count(),0);
+ assert.equal(await page.locator('[data-attribute="Объём"]').count(),0);
  await page.locator('[aria-label="Цвет: Молочный"]').click();
  await page.locator('[data-filter="onlyStock"]').check();
  // Hat Line has this color but zero stock: a different available color must not match.
@@ -38,12 +38,12 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.locator('[data-action="resetFilters"]').first().click();
  await page.locator('[data-category="all"]').first().click();
  await page.locator('[data-price="maxPrice"]').fill('30');await page.locator('[data-price="maxPrice"]').press('Tab');
- assert.equal(await cards().count(),1);
- assert.match(await cards().innerText(),/Рибана/);
+ assert.equal(await cards().count(),3);
+ assert.match((await cards().allTextContents()).join(' '),/Рибана/);
  await page.locator('[data-price="minPrice"]').fill('100');await page.locator('[data-price="minPrice"]').press('Tab');
  assert.equal(await cards().count(),0);assert.match(await page.locator('.empty').innerText(),/больше/);
  await page.goto('http://shop.test/?view=catalog&cat=unknown&min=NaN&max=-2&page=999&size=17&attr.X=oops');
- assert.equal(await cards().count(),12);assert(!page.url().includes('unknown'));assert(!page.url().includes('NaN'));
+ assert.equal(await cards().count(),2);assert.match(page.url(),/page=2/);assert(!page.url().includes('unknown'));assert(!page.url().includes('NaN'));
  // Direct product link, cart and browser return preserve the catalog URL state.
  await page.goto('http://shop.test/?view=catalog&cat=hats&sort=price-asc');
  await page.locator('.catalog-results [data-product="hat-line"]').first().click();
@@ -52,10 +52,10 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.locator('.header-icons [data-go="cart"]').click();assert.equal(await page.locator('.cart-item').count(),1);
  await page.goBack();await page.goBack();assert.equal(await cards().count(),4);
  await page.locator('.header .brand').click();await page.reload();assert.equal(await page.locator('.value-home').count(),1);
- await page.goto('http://shop.test/?view=catalog&cat=hair&attr.Вариант=250 мл&attr.Вариант=500 мл&sale=1');
+ await page.goto('http://shop.test/?view=catalog&cat=hair&attr.Объём=250 мл&attr.Объём=500 мл&sale=1');
  assert.equal(await cards().count(),0);
  await page.getByRole('button',{name:'Убрать фильтр: Со скидкой',exact:true}).click();assert.equal(await cards().count(),2);
- await page.getByRole('button',{name:'Убрать фильтр: Вариант: 250 мл',exact:true}).click();assert.equal(await cards().count(),2);
+ await page.getByRole('button',{name:'Убрать фильтр: Объём: 250 мл',exact:true}).click();assert.equal(await cards().count(),2);
  await page.goto('http://shop.test/?view=catalog&collection=sale');assert.equal(await cards().count(),3);
  await page.goto('http://shop.test/?view=catalog&collection=new');assert.equal(await cards().count(),3);
  await page.goto('http://shop.test/?view=catalog&cat=hats');
@@ -65,9 +65,29 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.screenshot({path:'/tmp/catalog-mobile-original-data.png',fullPage:true});
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
  await page.setViewportSize({width:1440,height:1000});
+ // The configured assortment is reachable on the homepage, in the tree and mobile menu.
+ await page.goto('http://shop.test/');
+ assert.deepEqual(await page.locator('.value-cat-name').allTextContents(),['Головные уборы и аксессуары','Косметика и бытовая химия','Хозяйственные товары','Продукты питания']);
+ await page.locator('.value-cat[data-cat="household"]').click();
+ assert.deepEqual(await page.locator('.categories-bar [data-category]').allTextContents(),['Губки','Тряпки','← Все товары']);
+ for(const [id,title] of [['creams','Кремы'],['cloths','Тряпки']]){
+  await page.locator(`[data-category="${id}"]`).first().click();
+  assert.equal(await page.locator('.page-heading').innerText(),title);
+  assert.match(await page.locator('.empty').innerText(),/В категории пока нет товаров/);
+  assert.equal(await page.locator('[data-price]').count(),0);
+  await page.reload();assert.equal(await page.locator('.page-heading').innerText(),title);
+ }
+ await page.locator('.empty [data-category="all"]').click();assert.equal(await cards().count(),12);
+ await page.setViewportSize({width:390,height:844});
+ await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
+ await page.locator('.mobile-menu [data-cat="cosmetics"]').click();assert.equal(await cards().count(),4);
+ await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
+ await page.locator('.mobile-menu [data-cat="food"]').click();assert.equal(await cards().count(),1);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ await page.setViewportSize({width:1440,height:1000});
  // A separate in-memory fixture exercises pagination at the intended catalog size.
- const fixture=`const originals=products.slice();for(let i=products.length;i<500;i++){const p=originals[i%originals.length];products.push({...p,id:p.id+'-test-'+i,name:p.name+' '+i,price:200+i,attrs:{...p.attrs},variants:p.variants.map(v=>({...v}))})}`;
- const large=html.replace('// Leaf categories',fixture+'\n// Leaf categories');
+ const fixture=`const originals=products.slice();for(let i=products.length;i<500;i++){const p=originals[i%originals.length];products.push({...p,id:p.id+'-test-'+i,name:p.name+' '+i,price:200+i,attrs:{...p.attrs},variants:p.variants.map(v=>({...v,price:200+i}))})}`;
+ const large=html.replace('const skuPrice=',fixture+'\nconst skuPrice=');
  await page.unroute('http://shop.test/**');await page.route('http://shop.test/**',r=>r.fulfill({contentType:'text/html',body:large}));
  await page.goto('http://shop.test/?view=catalog&sort=price-asc');
  assert.equal(await cards().count(),12);assert.match(await page.locator('.catalog-toolbar [role="status"]').innerText(),/500/);
