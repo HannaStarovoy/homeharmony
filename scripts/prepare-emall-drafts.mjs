@@ -1,0 +1,51 @@
+// Reads Emall, builds a portable draft bundle, verifies it in an isolated database.
+// No writes to Emall or the live shop database; credentials never enter the bundle.
+import {readFile,writeFile,mkdir,mkdtemp,rename,rm,stat} from 'node:fs/promises';
+import {resolve,dirname,join} from 'node:path';
+import {tmpdir} from 'node:os';
+import {createEmallClient,EmallError} from '../server/emall.mjs';
+import {prepareEmallRecords,EmallAdapterError} from '../server/emall-adapter.mjs';
+import {prepareEmallImages,EmallMediaError} from '../server/emall-media.mjs';
+import {openStore,root} from '../server/store.mjs';
+import {loadDraftBundle} from '../server/draft-bundle.mjs';
+
+let staging,tempDatabase,store;
+try{
+ const args=process.argv.slice(2);let output=resolve(root,'var/emall-prepared');
+ for(let i=0;i<args.length;i++){
+  if(args[i]==='--output'&&args[i+1])output=resolve(args[++i]);
+  else throw new Error('INVALID_ARGUMENT');
+ }
+ if(await stat(output).then(()=>true,()=>false))throw new Error('OUTPUT_EXISTS');
+ await mkdir(dirname(output),{recursive:true});staging=await mkdtemp(join(dirname(output),'.emall-stage-'));
+ const seed=await readFile(join(root,'catalog-data.js'),'utf8');
+ const categories=JSON.parse(seed.slice(seed.indexOf('window.catalogData = ')+'window.catalogData = '.length).trim().replace(/;$/,'')).categories;
+ let categoryMap={};try{categoryMap=JSON.parse(await readFile(join(root,'data/emall-category-map.json'),'utf8'))}catch(error){if(error.code!=='ENOENT')throw new Error('CATEGORY_MAP_INVALID')}
+ const prepared=await prepareEmallRecords(createEmallClient(),{limit:5,categories,categoryMap});
+ if(prepared.records.length!==5)throw new Error('EXPECTED_FIVE_PRODUCTS');
+ const photos=await prepareEmallImages(prepared.imageJobs,{directory:staging});
+ for(const product of prepared.records)product.images=photos.imagesByExternalId[product.externalId]||[];
+ const manifest={version:1,source:{provider:'emall',environment:'production',account:'homeharmony-emall-main'},products:prepared.records,media:photos.media};
+ await writeFile(join(staging,'manifest.json'),JSON.stringify(manifest,null,2)+'\n','utf8');
+ await writeFile(join(staging,'review.json'),JSON.stringify({warnings:[...prepared.warnings,...photos.warnings]},null,2)+'\n','utf8');
+ tempDatabase=await mkdtemp(join(tmpdir(),'homeharmony-verify-drafts-'));store=openStore(tempDatabase);
+ loadDraftBundle(store,staging);
+ const drafts=store.products().filter(p=>p.status==='draft'&&p.variants.some(v=>v.sourceManaged));
+ if(drafts.length!==5||store.products(true).length!==14)throw new Error('DRAFT_VERIFICATION_FAILED');
+ loadDraftBundle(store,staging);
+ if(store.products().filter(p=>p.status==='draft'&&p.variants.some(v=>v.sourceManaged)).length!==5)throw new Error('DUPLICATE_VERIFICATION_FAILED');
+ store.close();store=null;
+ await rename(staging,output);staging=null;
+ const report={prepared:5,photos:photos.media.length,warningCount:prepared.warnings.length+photos.warnings.length,published:0};
+ console.log(JSON.stringify(report));
+ if(process.env.GITHUB_STEP_SUMMARY)await writeFile(process.env.GITHUB_STEP_SUMMARY,'## Черновики Emall\n\n- Подготовлено карточек: 5\n- Загружено фотографий: '+report.photos+'\n- Предупреждений для проверки: '+report.warningCount+'\n- Опубликовано на витрине: 0\n\nПакет проверен в отдельной базе. На рабочий магазин он применяется после сохранения в репозитории.\n','utf8');
+}catch(error){
+ const known=error instanceof EmallError||error instanceof EmallAdapterError||error instanceof EmallMediaError;
+ const report={error:known?error.code:['INVALID_ARGUMENT','OUTPUT_EXISTS','CATEGORY_MAP_INVALID','EXPECTED_FIVE_PRODUCTS','DRAFT_VERIFICATION_FAILED','DUPLICATE_VERIFICATION_FAILED'].includes(error.message)?error.message:'PREPARATION_FAILED'};
+ if(Number.isSafeInteger(error.categoryId))report.categoryId=error.categoryId;
+ if(known&&typeof error.hostname==='string'&&/^[a-z0-9.-]+$/i.test(error.hostname))report.hostname=error.hostname;
+ if(known&&Number.isInteger(error.status))report.status=error.status;
+ console.error(JSON.stringify(report));process.exitCode=1;
+}finally{
+ store?.close();if(staging)await rm(staging,{recursive:true,force:true});if(tempDatabase)await rm(tempDatabase,{recursive:true,force:true});
+}

@@ -80,7 +80,7 @@ function validateProduct(product){
   if(has(product.prices,'old_price')&&product.prices.old_price!==null)readInteger(product.prices.old_price,'data[].prices.old_price');
  }
 }
-function validatePage(payload,page){
+function validatePage(payload,page,validateItem=validateProduct){
  if(!record(payload))invalid('response.json','object',payload);
  if(payload.success===false)invalid('success','not-false',payload.success);
  if(!Array.isArray(payload.data))invalid('data','array',payload.data);
@@ -103,7 +103,7 @@ function validatePage(payload,page){
   const expected=Math.min(meta.per_page,meta.total-(page-1)*meta.per_page);
   if(meta.count!==expected)pagination('meta.count','consistent-pagination',raw.count);
  }
- for(const product of payload.data)validateProduct(product);
+ for(const product of payload.data)validateItem(product);
  return meta;
 }
 const curlQuote=value=>'"'+value.replace(/\\/g,'\\\\').replace(/"/g,'\\"')+'"';
@@ -182,5 +182,62 @@ export function createEmallClient({token,environment='production',transport=curl
   }
   return {environment,products,pagesRead,total};
  }
- return {listProducts};
+ // Only these documented dictionary routes are available; callers cannot choose a URL.
+ async function readDictionary(path,key,validateItem){
+  const entries=[],seen=new Set();let page=1,total=null,actualPerPage=null;
+  while(page<=100){
+   const url=new URL(path,'https://'+HOSTS[environment]);
+   url.searchParams.set('page',String(page));url.searchParams.set('perPage','100');
+   let response;
+   try{response=await transport({url:url.href,headers:{Accept:'application/json',Authorization:'Bearer '+credential}})}
+   catch(error){throw new EmallError(error instanceof EmallError?error.code:'NETWORK',error instanceof EmallError?error.status:null,error instanceof EmallError?error.diagnostic:null)}
+   if(!record(response))invalid('response','object',response);
+   if(!integer(response.status,100)||response.status>599)invalid('response.status','http-status',response.status);
+   if(response.status!==200)throw new EmallError('HTTP_ERROR',response.status);
+   let payload,meta;
+   try{
+    if(typeof response.body!=='string')invalid('response.body','string',response.body);
+    if(Buffer.byteLength(response.body,'utf8')>MAX_RESPONSE_BYTES)throw new EmallError('RESPONSE_TOO_LARGE');
+    try{payload=JSON.parse(response.body)}catch{invalid('response.json','JSON',NON_JSON)}
+    meta=validatePage(payload,page,validateItem);
+    if(meta.total>10000||meta.total_pages>100)throw new EmallError('PAGINATION_ERROR');
+    if(total!==null&&meta.total!==total)pagination('meta.total','stable-total',payload.meta.total);
+    if(actualPerPage!==null&&meta.per_page!==actualPerPage)pagination('meta.per_page','stable-page-size',payload.meta.per_page);
+    for(const entry of payload.data){
+     const id=sourceInteger(entry.id,1);
+     if(seen.has(id))pagination('data[].id','unique-id',entry.id);
+     seen.add(id);
+    }
+   }catch(error){throw new EmallError(error instanceof EmallError?error.code:'INVALID_RESPONSE',response.status,error instanceof EmallError?error.diagnostic:null)}
+   entries.push(...payload.data);total=meta.total;actualPerPage=meta.per_page;
+   if(page>=meta.total_pages)return {[key]:entries,pagesRead:page,total};
+   page++;
+  }
+  throw new EmallError('PAGINATION_ERROR');
+ }
+ function getCatalogCategories(){
+  let nodes=0;
+  function validateCategory(category,depth=0){
+   if(!record(category)||depth>20||++nodes>10000)invalid('data[]','object',category);
+   readInteger(category.id,'data[].id',1);
+   if(typeof category.name!=='string'||!category.name.trim())invalid('data[].name','nonempty-string',category.name);
+   if(category.children!==undefined&&category.children!==null){
+    if(!Array.isArray(category.children))invalid('data','array',category.children);
+    for(const child of category.children)validateCategory(child,depth+1);
+   }
+  }
+  return readDictionary('/open/api/v1/catalog/categories','categories',validateCategory);
+ }
+ async function getCategoryProperties(categoryId){
+  const id=sourceInteger(categoryId,1);
+  if(id===null)throw new EmallError('INVALID_CONFIG');
+  function validateProperty(value){
+   if(!record(value))invalid('data[]','object',value);
+   readInteger(value.id,'data[].id',1);
+   if(value.name!==undefined&&value.name!==null&&typeof value.name!=='string')invalid('data[].name','string-or-null',value.name);
+   if(value.property!==undefined&&value.property!==null&&!record(value.property))invalid('data[]','object',value.property);
+  }
+  return readDictionary('/open/api/v1/configurator/categories/'+id+'/properties','properties',validateProperty);
+ }
+ return {listProducts,getCatalogCategories,getCategoryProperties};
 }

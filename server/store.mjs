@@ -6,11 +6,12 @@ import { randomUUID } from 'node:crypto';
 import { Problem } from './errors.mjs';
 import { createOrderStore } from './orders.mjs';
 import { createImportStore } from './imports.mjs';
+import { loadDraftBundle } from './draft-bundle.mjs';
 export { Problem } from './errors.mjs';
 
 export const root = fileURLToPath(new URL('../', import.meta.url));
 const json = value => JSON.stringify(value);
-export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var'), {reserveHours=Number(process.env.SHOP_RESERVE_HOURS||24)}={}) {
+export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var'), {reserveHours=Number(process.env.SHOP_RESERVE_HOURS||24),draftBundleDir=null}={}) {
   dataDir = resolve(dataDir);
   mkdirSync(dataDir, { recursive: true, mode: 0o700 });
   const uploadDir = join(dataDir, 'uploads');
@@ -122,6 +123,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   }
   const store={db,dataDir,uploadDir,categories,products,saveProduct,isPublicMedia,orders,close:()=>db.close()};
   store.imports=createImportStore(store,validateProduct);
+  if(draftBundleDir)loadDraftBundle(store,draftBundleDir);
   return store;
 }
 

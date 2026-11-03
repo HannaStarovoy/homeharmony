@@ -8,8 +8,8 @@ import { login, session } from './auth.mjs';
 import { templates } from './schema.mjs';
 import { deliveries } from './orders.mjs';
 
-export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=process.env.NODE_ENV==='production',reserveHours}={}) {
-  const store=openStore(dataDir,{...(reserveHours===undefined?{}:{reserveHours})});
+export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=process.env.NODE_ENV==='production',reserveHours,draftBundleDir=dataDir===undefined?join(root,'data/emall-drafts'):null}={}) {
+  const store=openStore(dataDir,{...(reserveHours===undefined?{}:{reserveHours}),draftBundleDir});
   const cookie=(token,maxAge)=>`shop_session=${token}; Path=/; HttpOnly; SameSite=Strict; Max-Age=${maxAge}${secureCookies?'; Secure':''}`;
   if (origin && (!/^https?:\/\//.test(origin) || new URL(origin).origin!==origin)) throw new Error('SHOP_ORIGIN must be a complete origin without a trailing slash or path.');
   if (process.env.NODE_ENV==='production' && (!origin?.startsWith('https://') || !secureCookies)) throw new Error('Production requires an HTTPS SHOP_ORIGIN and secure cookies.');

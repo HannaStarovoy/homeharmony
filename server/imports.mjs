@@ -68,6 +68,7 @@ export function createImportStore(store,validateProduct){
  function report(plan){return {source:plan.source,selected:plan.selected,remaining:plan.remaining,created:plan.plans.filter(p=>p.action==='create').length,updated:plan.plans.filter(p=>p.action==='update').length,unchanged:plan.plans.filter(p=>p.action==='unchanged').length,items:plan.plans.map(p=>({externalId:p.externalId,productId:p.productId,name:p.payload.name,action:p.action,variants:p.links.map(v=>({externalId:v.externalId,externalSku:v.externalSku,localSku:v.sku})),warnings:p.warnings}))}}
  function preview(records,source,options){return report(build(records,source,options))}
  function apply(records,source,options){
+  if(options?.beforeCommit!==undefined&&typeof options.beforeCommit!=='function')throw new Error('beforeCommit must be a function.');
   store.orders.expire();db.exec('BEGIN IMMEDIATE');
   try{
    const plan=build(records,source,options),now=new Date().toISOString();
@@ -81,6 +82,7 @@ export function createImportStore(store,validateProduct){
    }
    const result={id:randomUUID(),...report(plan),appliedAt:now};
    db.prepare('INSERT INTO import_runs VALUES(?,?,?,?,?,?)').run(result.id,...scope(plan.source),now,stringify(result));
+   options?.beforeCommit?.({db,result});
    db.exec('COMMIT');return result;
   }catch(error){db.exec('ROLLBACK');throw error}
  }

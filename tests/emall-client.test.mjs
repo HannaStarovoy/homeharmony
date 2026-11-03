@@ -230,3 +230,37 @@ else{const result=await run;assert.equal(result.products.length,1);assert.equal(
   assert.equal(await readFile(log,'utf8'),'called\ncalled\n');
  }finally{await rm(dir,{recursive:true,force:true})}
 });
+
+test('documented category tree dictionaries paginate on fixed read-only endpoints',async()=>{
+ const calls=[];
+ const instance=client(async request=>{
+  calls.push(request);const url=new URL(request.url),current=Number(url.searchParams.get('page'));
+  assert.equal(url.pathname,'/open/api/v1/catalog/categories');assert.equal(url.searchParams.get('perPage'),'100');
+  assert.equal(request.headers.Authorization,'Bearer '+token);
+  return page([{id:current,name:'Категория '+current,children:[{id:current+100,name:'Дочерняя категория'}]}],{total:2,current,perPage:1});
+ });
+ const result=await instance.getCatalogCategories();
+ assert.equal(calls.length,2);assert.equal(result.pagesRead,2);assert.equal(result.total,2);assert.deepEqual(result.categories.map(v=>v.id),[1,2]);
+ assert(calls.every(v=>new URL(v.url).hostname==='api.emall.by'));
+});
+test('category properties decode no data in the client and only permit a numeric route parameter',async()=>{
+ const raw={id:149,name:'Материал',property:{name:'Материал',type:{id:3,name:'list',title:'Список'},values:[{id:1,value:'Шерсть'}]}};
+ let calls=0;
+ const instance=client(async request=>{
+  calls++;assert.equal(request.url,'https://api.emall.by/open/api/v1/configurator/categories/123/properties?page=1&perPage=100');
+  return page([raw],{perPage:100});
+ });
+ assert.deepEqual(await instance.getCategoryProperties('00123'),{properties:[raw],pagesRead:1,total:1});
+ for(const id of [undefined,null,0,-1,1.5,'1/../../products','1?token=secret','https://other.example',true])await assert.rejects(instance.getCategoryProperties(id),errorCode('INVALID_CONFIG'));
+ assert.equal(calls,1);
+});
+test('dictionary reads reject malformed data and contradictory or unbounded pagination safely',async()=>{
+ for(const response of [page([{id:1,name:' '}]),page([{id:1,name:'Test',children:'private'}]),page([{id:1,name:'Test'}],{total:10001,perPage:1})])await assert.rejects(client(async()=>response).getCatalogCategories(),error=>['INVALID_RESPONSE','PAGINATION_ERROR'].includes(error.code));
+ let calls=0;
+ await assert.rejects(client(async()=>{
+  calls++;return page([{id:1,name:'Repeated category'}],{total:2,current:calls,perPage:1});
+ }).getCatalogCategories(),errorCode('PAGINATION_ERROR'));
+ assert.equal(calls,2);
+ await assert.rejects(client(async()=>({status:403,body:'private-response '+token})).getCategoryProperties(11),error=>error.code==='HTTP_ERROR'&&error.status===403&&!String(error.stack).includes(token));
+ await assert.rejects(client(async()=>{throw new Error(token)}).getCatalogCategories(),error=>error.code==='NETWORK'&&!String(error.stack).includes(token));
+});
