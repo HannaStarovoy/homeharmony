@@ -9,6 +9,7 @@ import sharp from 'sharp';
 
 const MAX_BYTES=8*1024*1024,MAX_PIXELS=25_000_000,MAX_PHOTOS=8,MAX_REDIRECTS=4;
 const PUBLIC_SUFFIXES=['emall.by','edostavka.by'];
+const PUBLIC_HOSTS=new Set(['cdn.ime.by']);
 const MESSAGES={
  INVALID_CONFIG:'Некорректные настройки подготовки фотографий Emall.',
  INVALID_SOURCE_URL:'Emall вернул небезопасный адрес фотографии.',
@@ -53,7 +54,7 @@ function sourceURL(value,base){
  try{url=base?new URL(value,base):new URL(value)}catch{throw failure('INVALID_SOURCE_URL')}
  const authority=(value.match(/^(?:https?:)?\/\/([^/?#]*)/i)||[])[1];
  if(url.protocol!=='https:'||url.username||url.password||authority?.includes('@')||url.port||url.hash||isIP(url.hostname)||!safeHostname(url.hostname))throw failure('INVALID_SOURCE_URL');
- if(!PUBLIC_SUFFIXES.some(suffix=>url.hostname===suffix||url.hostname.endsWith('.'+suffix)))throw failure('HOST_NOT_ALLOWED',{hostname:url.hostname});
+ if(!PUBLIC_HOSTS.has(url.hostname)&&!PUBLIC_SUFFIXES.some(suffix=>url.hostname===suffix||url.hostname.endsWith('.'+suffix)))throw failure('HOST_NOT_ALLOWED',{hostname:url.hostname});
  return url.href;
 }
 

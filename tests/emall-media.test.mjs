@@ -79,18 +79,18 @@ test('only the first eight product photos are selected and the cap is visible',a
 
 test('HTTPS Emall and Edostavka host boundaries allow public source images only',async t=>{
  const path=await directory(t),input=await photo();let calls=0;
- for(const url of ['https://emall.by/photo.png','https://api-sandbox.emall.by/storage/images/photo.jpg','https://img.edostavka.by/a.png']){
+ for(const url of ['https://emall.by/photo.png','https://api-sandbox.emall.by/storage/images/photo.jpg','https://img.edostavka.by/a.png','https://cdn.ime.by/photo.webp']){
   await prepareEmallImages([job([url])],{directory:path,transport:async()=>{calls++;return {status:200,body:input}}});
  }
- assert.equal(calls,3);
- for(const hostname of ['emall.by.evil.example','evilemall.by','example.test','private.example','127.0.0.1.emall.by.evil.example']){
+ assert.equal(calls,4);
+ for(const hostname of ['emall.by.evil.example','evilemall.by','example.test','private.example','127.0.0.1.emall.by.evil.example','other.ime.by','sub.cdn.ime.by','cdn.ime.by.evil.example']){
   const url='https://'+hostname+'/PRIVATE_IMAGE?token=PRIVATE_QUERY';
   await assert.rejects(prepareEmallImages([job([url])],{directory:path,transport:async()=>{calls++}}),error=>{
    assert.equal(error.code,'HOST_NOT_ALLOWED');assert.equal(error.hostname,hostname);
    assert(!JSON.stringify(error).includes('PRIVATE'));assert(!error.message.includes(url));return true;
   });
  }
- assert.equal(calls,3);
+ assert.equal(calls,4);
 });
 
 test('unsafe URLs and path traversal fail before requests and filesystem writes',async t=>{
