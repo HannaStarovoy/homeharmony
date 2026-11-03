@@ -36,6 +36,54 @@ test('sandbox is restricted to its own host when explicitly configured',async()=
  }}).listProducts();
  assert.equal(result.environment,'sandbox');
 });
+test('documented direct product details and compatible object envelopes preserve source fields',async()=>{
+ const raw={...card('009000821'),country_id:309,barcode:'5656565656561',is_adult:false,dimension:{width:151,height:200,length:890,weight:28000},composition:null,brand_id:22117,manufacturer_name:'Искусственный изготовитель',warranty_unit:'none',importer_name:'Искусственный импортёр',vat:20,stock:24,kit:null};
+ for(const payload of [raw,{data:raw},{success:true,data:raw}]){
+  const requests=[];
+  const result=await client(async request=>{requests.push(request);return {status:200,body:JSON.stringify(payload)}}).getProduct('0009000821');
+  assert.deepEqual(result,{environment:'production',product:raw});
+  assert.equal(requests.length,1);assert.equal(requests[0].url,'https://api.emall.by/open/api/v1/products/9000821');
+  assert.deepEqual(requests[0].headers,{Accept:'application/json',Authorization:'Bearer '+token});
+  assert(!JSON.stringify(result).includes(token));
+ }
+ const instance=createEmallClient({token,environment:'sandbox',transport:async request=>{
+  assert.equal(request.url,'https://api-sandbox.emall.by/open/api/v1/products/9000821');
+  return {status:200,body:JSON.stringify(raw)};
+ }});
+ assert.equal((await instance.getProduct(9000821)).environment,'sandbox');
+ assert(!JSON.stringify(instance).includes(token));assert.equal(Object.hasOwn(instance,'token'),false);
+});
+test('product details accept only complete safe positive IDs before making a request',async()=>{
+ let calls=0;
+ const instance=client(async request=>{calls++;const id=Number(new URL(request.url).pathname.split('/').at(-1));return {status:200,body:JSON.stringify(card(id))}});
+ for(const id of [undefined,null,true,false,0,'0',-1,1.5,NaN,Infinity,'',' ',' 1','1 ','+1','1.0','1e0','0x1','1x','1/../../products','1?token=secret','1#fragment','%31','https://other.example','9007199254740992',Number.MAX_SAFE_INTEGER+1,[],{}])await assert.rejects(instance.getProduct(id),errorCode('INVALID_CONFIG'));
+ assert.equal(calls,0);
+ for(const id of [1,'0001',Number.MAX_SAFE_INTEGER,String(Number.MAX_SAFE_INTEGER)])assert.equal((await instance.getProduct(id)).product.id,Number(id));
+ assert.equal(calls,4);
+});
+test('product details require a matching validated product, with no partial or missing-ID fallback',async()=>{
+ const malformed=[null,[],{}, {name:'Искусственная карточка'}, {data:null},{data:[]},{data:{}},{success:false,data:card(1)},card(2),{data:card(2)}, {...card(1),id:'1x'},{...card(1),images:'private'},{...card(1),name:' '}];
+ for(const payload of malformed)await assert.rejects(client(async()=>({status:200,body:JSON.stringify(payload)})).getProduct(1),errorCode('INVALID_RESPONSE'));
+ await assert.rejects(client(async()=>({status:200,body:JSON.stringify(card('0002'))})).getProduct(1),error=>{
+  assert.equal(error.status,200);assert.deepEqual(error.diagnostic,{field:'data[].id',expected:'requested-id',actual:'string'});
+  return error.code==='INVALID_RESPONSE';
+ });
+});
+test('product detail transport failures, redirects and malformed bodies stay bounded and private',async()=>{
+ const privateText='private-response '+token;
+ for(const status of [301,302,307,308,401,403,404,429,500]){
+  let calls=0;
+  await assert.rejects(client(async()=>{calls++;return {status,body:privateText}}).getProduct(1),error=>error.code==='HTTP_ERROR'&&error.status===status&&!String(error.stack).includes(token));
+  assert.equal(calls,1);
+ }
+ await assert.rejects(client(async()=>{throw new Error(privateText)}).getProduct(1),error=>error.code==='NETWORK'&&!String(error.stack).includes(token)&&!Object.hasOwn(error,'cause'));
+ for(const response of [null,{}, {status:'200',body:'{}'},{status:600,body:'{}'}, {status:200,body:{}},{status:200,body:'<html>'+privateText+'</html>'}])await assert.rejects(client(async()=>response).getProduct(1),error=>error.code==='INVALID_RESPONSE'&&!JSON.stringify(error).includes(token));
+ await assert.rejects(client(async()=>({status:200,body:'x'.repeat(5*1024*1024+1)})).getProduct(1),errorCode('RESPONSE_TOO_LARGE'));
+ await assert.rejects(client(async()=>({status:200,body:JSON.stringify({...card(1),stock:privateText,[privateText]:privateText})})).getProduct(1),error=>{
+  assert.deepEqual(error.diagnostic,{field:'data[].stock',expected:'nonnegative-integer',actual:'string'});
+  assert(!JSON.stringify(error).includes(token));return error.code==='INVALID_RESPONSE';
+ });
+});
 test('a production default token cannot fall back into sandbox; sandbox uses its distinct binding',async()=>{
  const code=`import assert from 'node:assert/strict';import{createEmallClient}from'./server/emall.mjs';
  let calls=0;assert.throws(()=>createEmallClient({environment:'sandbox',transport:async()=>{calls++}}),e=>e.code==='TOKEN_MISSING');assert.equal(calls,0);
@@ -209,25 +257,25 @@ assert.deepEqual(process.argv.slice(2),['--disable','--config','-']);
 const config=readFileSync(0,'utf8');
 assert(config.includes('header = "Authorization: Bearer fictional-curl-secret"'));
 assert(config.includes('header = "Accept: application/json"'));
-assert(config.includes('url = "https://api.emall.by/open/api/v1/products?page=1&perPage=5"'));
+assert(config.includes('url = "https://api.emall.by/open/api/v1/products'+(process.env.FAKE_CURL_DETAIL==='yes'?'/1':'?page=1&perPage=5')+'"'));
 assert(config.includes('request = "GET"'));assert(config.includes('proto = "=https"'));assert(config.includes('proto-redir = "=https"'));
 assert(config.includes('max-redirs = 0'));assert(config.includes('max-filesize = 5242880'));assert(config.includes('max-time = 30'));
 assert(!/^(?:location|insecure|verbose|trace|trace-ascii)\\b/m.test(config));
 appendFileSync(process.env.FAKE_CURL_LOG,'called\\n');
-process.stdout.write(${JSON.stringify(page([card(1)]).body)}+'\\n'+process.env.FAKE_CURL_STATUS);
+process.stdout.write((process.env.FAKE_CURL_DETAIL==='yes'?${JSON.stringify(JSON.stringify(card(1)))}:${JSON.stringify(page([card(1)]).body)})+'\\n'+process.env.FAKE_CURL_STATUS);
 `;
   // .mjs keeps the executable fixture an ES module independent of the temp directory.
   await writeFile(join(dir,'fake-curl.mjs'),executable,{mode:0o700});
   await writeFile(join(dir,'curl'),`#!${process.execPath}\nawait import(${JSON.stringify(new URL('file://'+join(dir,'fake-curl.mjs')).href)});\n`,{mode:0o700});
-  for(const status of ['200','302']){
+  for(const detail of ['no','yes'])for(const status of ['200','302']){
    const code=`import assert from 'node:assert/strict';import{createEmallClient}from'./server/emall.mjs';
-const run=createEmallClient().listProducts();
+const instance=createEmallClient();const run=process.env.FAKE_CURL_DETAIL==='yes'?instance.getProduct('0001'):instance.listProducts();
 if(process.env.FAKE_CURL_STATUS==='302')await assert.rejects(run,e=>e.code==='HTTP_ERROR'&&e.status===302);
-else{const result=await run;assert.equal(result.products.length,1);assert.equal(result.products[0].id,1);assert.equal(result.pagesRead,1)}console.log('PASS');`;
-   const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{cwd:new URL('../',import.meta.url),env:{...process.env,PATH:dir+delimiter+process.env.PATH,EMALL_API_TOKEN:'fictional-curl-secret',EMALL_SANDBOX_API_TOKEN:'',FAKE_CURL_LOG:log,FAKE_CURL_STATUS:status}});
+else{const result=await run;if(process.env.FAKE_CURL_DETAIL==='yes')assert.equal(result.product.id,1);else{assert.equal(result.products.length,1);assert.equal(result.products[0].id,1);assert.equal(result.pagesRead,1)}}console.log('PASS');`;
+   const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{cwd:new URL('../',import.meta.url),env:{...process.env,PATH:dir+delimiter+process.env.PATH,EMALL_API_TOKEN:'fictional-curl-secret',EMALL_SANDBOX_API_TOKEN:'',FAKE_CURL_LOG:log,FAKE_CURL_STATUS:status,FAKE_CURL_DETAIL:detail}});
    assert.equal(stdout.trim(),'PASS');
   }
-  assert.equal(await readFile(log,'utf8'),'called\ncalled\n');
+  assert.equal(await readFile(log,'utf8'),'called\ncalled\ncalled\ncalled\n');
  }finally{await rm(dir,{recursive:true,force:true})}
 });
 

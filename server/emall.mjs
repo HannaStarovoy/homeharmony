@@ -14,7 +14,7 @@ const MESSAGES={
 };
 // Diagnostics contain only fixed schema paths and type labels, never response data or keys.
 const DIAGNOSTIC_FIELDS=new Set(['response','response.status','response.body','response.json','success','data','meta','meta.total','meta.count','meta.per_page','meta.current_page','meta.total_pages','meta.last_page','data[]','data[].id','data[].name','data[].category_id','data[].stock','data[].inner_article','data[].description','data[].images','data[].images[]','data[].properties','data[].prices','data[].prices.price','data[].prices.old_price']);
-const DIAGNOSTIC_EXPECTED=new Set(['object','array','string','nonempty-string','string-or-null','array-or-null','object-or-null-or-empty-array','positive-integer','nonnegative-integer','http-status','JSON','not-false','count-matches-data','consistent-pagination','requested-page','stable-total','stable-page-size','unique-id']);
+const DIAGNOSTIC_EXPECTED=new Set(['object','array','string','nonempty-string','string-or-null','array-or-null','object-or-null-or-empty-array','positive-integer','nonnegative-integer','http-status','JSON','not-false','count-matches-data','consistent-pagination','requested-page','requested-id','stable-total','stable-page-size','unique-id']);
 const DIAGNOSTIC_ACTUAL=new Set(['missing','null','array','object','string','integer','number','boolean','bigint','symbol','function','non-JSON']);
 function safeDiagnostic(value){
  if(value===null||typeof value!=='object'||Array.isArray(value))return null;
@@ -145,6 +145,31 @@ export function createEmallClient({token,environment='production',transport=curl
  const credential=token===undefined?process.env[environment==='sandbox'?'EMALL_SANDBOX_API_TOKEN':'EMALL_API_TOKEN']:token;
  if(typeof credential!=='string'||!credential.trim())throw new EmallError('TOKEN_MISSING');
  if(credential.length>4096||/[\s\x00-\x1f\x7f]/.test(credential))throw new EmallError('INVALID_CONFIG');
+ async function getProduct(productId){
+  const id=sourceInteger(productId,1);
+  if(id===null)throw new EmallError('INVALID_CONFIG');
+  const url=new URL('/open/api/v1/products/'+id,'https://'+HOSTS[environment]);
+  let response;
+  try{response=await transport({url:url.href,headers:{Accept:'application/json',Authorization:'Bearer '+credential}})}
+  catch(error){throw new EmallError(error instanceof EmallError?error.code:'NETWORK',error instanceof EmallError?error.status:null,error instanceof EmallError?error.diagnostic:null)}
+  if(!record(response))invalid('response','object',response);
+  if(!integer(response.status,100)||response.status>599)invalid('response.status','http-status',response.status);
+  if(response.status!==200)throw new EmallError('HTTP_ERROR',response.status);
+  try{
+   if(typeof response.body!=='string')invalid('response.body','string',response.body);
+   if(Buffer.byteLength(response.body,'utf8')>MAX_RESPONSE_BYTES)throw new EmallError('RESPONSE_TOO_LARGE');
+   let payload;
+   try{payload=JSON.parse(response.body)}catch{invalid('response.json','JSON',NON_JSON)}
+   if(!record(payload))invalid('response.json','object',payload);
+   if(payload.success===false)invalid('success','not-false',payload.success);
+   // The documented detail response is a direct product; an object data envelope is compatible.
+   const product=has(payload,'data')?payload.data:payload;
+   if(has(payload,'data')&&!record(product))invalid('data','object',product);
+   validateProduct(product);
+   if(sourceInteger(product.id,1)!==id)invalid('data[].id','requested-id',product.id);
+   return {environment,product};
+  }catch(error){throw new EmallError(error instanceof EmallError?error.code:'INVALID_RESPONSE',response.status,error instanceof EmallError?error.diagnostic:null)}
+ }
  async function listProducts({limit=5}={}){
   if(!integer(limit,1)||limit>5000)throw new EmallError('INVALID_CONFIG');
   const products=[],seen=new Set(),perPage=Math.min(limit,100);
@@ -239,5 +264,5 @@ export function createEmallClient({token,environment='production',transport=curl
   }
   return readDictionary('/open/api/v1/configurator/categories/'+id+'/properties','properties',validateProperty);
  }
- return {listProducts,getCatalogCategories,getCategoryProperties};
+ return {listProducts,getProduct,getCatalogCategories,getCategoryProperties};
 }

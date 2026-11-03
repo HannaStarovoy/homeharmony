@@ -9,7 +9,7 @@ import {prepareEmallImages,EmallMediaError} from '../server/emall-media.mjs';
 import {openStore,root} from '../server/store.mjs';
 import {loadDraftBundle} from '../server/draft-bundle.mjs';
 
-let staging,tempDatabase,store,preparedReview,output=resolve(root,'var/emall-prepared');
+let staging,tempDatabase,store,preparedReview,sourceClient,output=resolve(root,'var/emall-prepared');
 try{
  const args=process.argv.slice(2);
  for(let i=0;i<args.length;i++){
@@ -21,7 +21,8 @@ try{
  const seed=await readFile(join(root,'catalog-data.js'),'utf8');
  const categories=JSON.parse(seed.slice(seed.indexOf('window.catalogData = ')+'window.catalogData = '.length).trim().replace(/;$/,'')).categories;
  let categoryMap={};try{categoryMap=JSON.parse(await readFile(join(root,'data/emall-category-map.json'),'utf8'))}catch(error){if(error.code!=='ENOENT')throw new Error('CATEGORY_MAP_INVALID')}
- const prepared=await prepareEmallRecords(createEmallClient(),{limit:5,categories,categoryMap});
+ sourceClient=createEmallClient();
+ const prepared=await prepareEmallRecords(sourceClient,{limit:5,categories,categoryMap});
  if(prepared.records.length!==5)throw new Error('EXPECTED_FIVE_PRODUCTS');
  preparedReview=prepared;
  const photos=await prepareEmallImages(prepared.imageJobs,{directory:staging});
@@ -54,7 +55,18 @@ try{
   await writeFile(output+'.diagnostic.json',redacted+'\n','utf8');
  }
  if(error instanceof EmallMediaError&&preparedReview){
-  const value=JSON.stringify({kind:'image-preparation',records:preparedReview.records,imageJobs:preparedReview.imageJobs,warnings:preparedReview.warnings,imageDiagnostic:error.imageDiagnostic??null},null,2);
+  const imageSources=[];
+  for(const record of preparedReview.records){
+   try{
+    const {product}=await sourceClient.getProduct(record.externalId);
+    const fieldNames=Object.keys(product).filter(key=>/image|photo|media|gallery/i.test(key)&&!/secret|token|auth|pass|cookie|key/i.test(key)&&/^[a-z0-9_]{1,60}$/i.test(key)).slice(0,20);
+    const images=(product.images||[]).filter(value=>{
+     try{const u=new URL(value);return u.protocol==='https:'&&!u.username&&!u.password}catch{return false}
+    });
+    imageSources.push({externalId:record.externalId,images,fieldNames});
+   }catch(detailError){imageSources.push({externalId:record.externalId,error:detailError instanceof EmallError?detailError.code:'DETAIL_UNAVAILABLE',status:detailError instanceof EmallError?detailError.status:null,diagnostic:detailError instanceof EmallError?detailError.diagnostic:null})}
+  }
+  const value=JSON.stringify({kind:'image-preparation',records:preparedReview.records,imageJobs:preparedReview.imageJobs,warnings:preparedReview.warnings,imageDiagnostic:error.imageDiagnostic??null,imageSources},null,2);
   const token=process.env.EMALL_API_TOKEN,redacted=token?value.split(token).join('[redacted]'):value;
   await mkdir(dirname(output),{recursive:true});await writeFile(output+'.diagnostic.json',redacted+'\n','utf8');
  }
