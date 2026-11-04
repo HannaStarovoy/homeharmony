@@ -1,0 +1,16 @@
+{
+  "version": 1,
+  "id": "emall-first-five-2026-11-04",
+  "source": {
+    "provider": "emall",
+    "environment": "production",
+    "account": "homeharmony-emall-main"
+  },
+  "externalIds": [
+    "9366858",
+    "9366859",
+    "9366867",
+    "9380065",
+    "9380066"
+  ]
+}
