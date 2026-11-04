@@ -2,7 +2,7 @@
 import {readFile,writeFile,mkdir,mkdtemp,rename,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
 import {tmpdir} from 'node:os';
-import {createEmallClient} from '../server/emall.mjs';
+import {createEmallClient,EmallError} from '../server/emall.mjs';
 import {prepareEmallRecords} from '../server/emall-adapter.mjs';
 import {prepareEmallImages} from '../server/emall-media.mjs';
 import {openStore,root} from '../server/store.mjs';
@@ -45,6 +45,8 @@ try{
  verification=await mkdtemp(join(tmpdir(),'homeharmony-verify-all-'));store=openStore(verification);loadDraftBundle(store,staging);loadDraftBundle(store,staging);
  if(store.products().filter(p=>p.variants.some(v=>v.sourceManaged)).length!==products.length||store.products(true).length!==14)throw Error('VERIFICATION_FAILED');
  store.close();store=null;await rename(staging,output);staging=null;
- console.log(JSON.stringify({received:listed.products.length,prepared:products.length,skipped:skipped.length,photos:media.size,published:0}));
-}catch(e){console.error(JSON.stringify({error:['OUTPUT_EXISTS','INVALID_ARGUMENT','CATALOG_LIMIT_EXCEEDED','NO_IMPORTABLE_PRODUCTS','VERIFICATION_FAILED','TOKEN_MISSING','HTTP_ERROR','NETWORK','PAGINATION_ERROR'].includes(e.code||e.message)?e.code||e.message:'IMPORT_FAILED'}));process.exitCode=1}
+ const summary={received:listed.products.length,prepared:products.length,skipped:skipped.length,photos:media.size,published:0};
+ console.log(JSON.stringify(summary));
+ if(process.env.GITHUB_STEP_SUMMARY)await writeFile(process.env.GITHUB_STEP_SUMMARY,'## Массовый импорт Emall\n\nПолучено товаров: '+summary.received+'\n\nПодготовлено карточек: '+summary.prepared+'\n\nПропущено: '+summary.skipped+'\n\nФотографий: '+summary.photos+'\n\nНовые товары подготовлены как черновики. Для применения на компьютере скачайте пакет emall-all.\n');
+}catch(e){console.error(JSON.stringify({...(e instanceof EmallError?{status:e.status,diagnostic:e.diagnostic}:{}),error:['OUTPUT_EXISTS','INVALID_ARGUMENT','CATALOG_LIMIT_EXCEEDED','NO_IMPORTABLE_PRODUCTS','VERIFICATION_FAILED','TOKEN_MISSING','HTTP_ERROR','NETWORK','PAGINATION_ERROR','INVALID_RESPONSE','RESPONSE_TOO_LARGE','INVALID_CONFIG'].includes(e.code||e.message)?e.code||e.message:'IMPORT_FAILED'}));process.exitCode=1}
 finally{store?.close();if(staging)await rm(staging,{recursive:true,force:true});if(verification)await rm(verification,{recursive:true,force:true})}
