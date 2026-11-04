@@ -2,9 +2,16 @@ name: Массовый импорт Emall
 
 on:
   workflow_dispatch:
+    inputs:
+      resume_run_id:
+        description: 'Номер успешного запуска для повтора только пропущенных товаров (необязательно)'
+        required: false
+        default: ''
+        type: string
 
 permissions:
   contents: read
+  actions: read
 
 jobs:
   prepare-drafts:
@@ -22,10 +29,24 @@ jobs:
         run: npm ci --no-audit --no-fund
       - name: Проверить импорт на тестовых данных
         run: npm test
+      - name: Восстановить предыдущий пакет
+        if: inputs.resume_run_id != ''
+        uses: actions/download-artifact@018cc2cf5baa6db3ef3c5f8a56943fffe632ef53
+        with:
+          name: emall-all
+          path: var/emall-resume
+          run-id: ${{ inputs.resume_run_id }}
+          github-token: ${{ github.token }}
       - name: Получить весь каталог и фотографии
         env:
           EMALL_API_TOKEN: ${{ secrets.EMALL_API_TOKEN }}
-        run: node scripts/import-emall-all.mjs
+          RESUME_RUN_ID: ${{ inputs.resume_run_id }}
+        run: |
+          if [ -n "$RESUME_RUN_ID" ]; then
+            node scripts/import-emall-all.mjs --resume var/emall-resume
+          else
+            node scripts/import-emall-all.mjs
+          fi
       - name: Сохранить пакет и отчёт
         if: always()
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
