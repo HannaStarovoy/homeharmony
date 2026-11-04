@@ -1,6 +1,7 @@
 // Read-only source import; writes a reviewed local draft bundle, never publishes.
 import {readFile,writeFile,mkdir,mkdtemp,rename,rm} from 'node:fs/promises';
 import {join,resolve} from 'node:path';
+import {tmpdir} from 'node:os';
 import {createEmallClient} from '../server/emall.mjs';
 import {prepareEmallRecords} from '../server/emall-adapter.mjs';
 import {prepareEmallImages} from '../server/emall-media.mjs';
@@ -41,7 +42,7 @@ try{
  await writeFile(join(staging,'manifest.json'),JSON.stringify(manifest,null,2)+'\n');
  const review=JSON.stringify({received:listed.products.length,prepared:products.length,skipped,warnings},null,2);
  await writeFile(join(staging,'review.json'),(process.env.EMALL_API_TOKEN?review.split(process.env.EMALL_API_TOKEN).join('[redacted]'):review)+'\n');
- verification=await mkdtemp(join(root,'var','.verify-all-'));store=openStore(verification);loadDraftBundle(store,staging);loadDraftBundle(store,staging);
+ verification=await mkdtemp(join(tmpdir(),'homeharmony-verify-all-'));store=openStore(verification);loadDraftBundle(store,staging);loadDraftBundle(store,staging);
  if(store.products().filter(p=>p.variants.some(v=>v.sourceManaged)).length!==products.length||store.products(true).length!==14)throw Error('VERIFICATION_FAILED');
  store.close();store=null;await rename(staging,output);staging=null;
  console.log(JSON.stringify({received:listed.products.length,prepared:products.length,skipped:skipped.length,photos:media.size,published:0}));
