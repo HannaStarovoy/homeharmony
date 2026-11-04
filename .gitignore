@@ -9,3 +9,6 @@ var/
 coverage/
 playwright-report/
 test-results/
+
+# Downloaded bulk catalog package; local shop data is not source code.
+data/emall-mass/
