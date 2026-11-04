@@ -25,7 +25,7 @@ jobs:
       - name: Получить пять карточек и фотографии
         env:
           EMALL_API_TOKEN: ${{ secrets.EMALL_API_TOKEN }}
-        run: node scripts/prepare-emall-drafts.mjs
+        run: node scripts/prepare-emall-drafts.mjs --saved-ids
       - name: Сохранить проверенный пакет
         uses: actions/upload-artifact@b7c566a772e6b6bfb58ed0dc250532a479d7789f
         with:

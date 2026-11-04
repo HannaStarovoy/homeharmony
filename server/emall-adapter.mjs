@@ -122,15 +122,34 @@ function propertyDictionary(properties){
   if(!object(entry)||id===null||dictionary.has(id))throw new EmallAdapterError('INVALID_PRODUCT');
   const property=object(entry.property)?entry.property:{},name=scalar(entry.name)||scalar(property.name);
   if(!name||/^\d+$/.test(name))continue;
-  const values=new Map(),items=property.values??entry.values;
+  const values=new Map(),conflictingValues=new Set(),items=property.values??entry.values;
   if(Array.isArray(items))for(const item of items){
    const valueId=sourceInteger(item?.id,0),label=scalar(item?.value);
-   if(valueId!==null&&label)values.set(valueId,label);
+   if(valueId!==null&&label){
+    if(values.has(valueId)&&values.get(valueId)!==label)conflictingValues.add(valueId);
+    values.set(valueId,label);
+   }
   }
-  const type=typeof property.type?.name==='string'?property.type.name.toLowerCase():'';
-  dictionary.set(id,{name,values,enumerated:type==='list'||type==='select'||values.size>0});
+  for(const valueId of conflictingValues)values.delete(valueId);
+  const type=typeof property.type?.name==='string'?property.type.name.trim().toLowerCase():'';
+  dictionary.set(id,{name,type,values,conflictingValues,enumerated:['list','select','multiselect','multiselect_list','multi_select','multi_select_list'].includes(type)||values.size>0||conflictingValues.size>0});
  }
  return dictionary;
+}
+function sharedPropertyDictionary(dictionaryCache){
+ const shared=new Map(),conflicts=new Set();
+ for(const [categoryId,dictionary] of dictionaryCache)for(const [id,definition] of dictionary){
+  if(conflicts.has(id))continue;
+  const previous=shared.get(id);
+  if(definition.conflictingValues.size||(previous&&(previous.name!==definition.name||previous.type!==definition.type||previous.enumerated!==definition.enumerated))){shared.delete(id);conflicts.add(id);continue}
+  if(!previous){shared.set(id,{...definition,values:new Map(definition.values),fromCategoryIds:[categoryId]});continue}
+  for(const [valueId,label] of definition.values){
+   if(previous.values.has(valueId)&&previous.values.get(valueId)!==label){shared.delete(id);conflicts.add(id);break}
+   previous.values.set(valueId,label);
+  }
+  if(!conflicts.has(id))previous.fromCategoryIds.push(categoryId);
+ }
+ return shared;
 }
 
 export async function prepareEmallRecords(client,{limit=5,categories,categoryMap={}}={}){
@@ -174,6 +193,16 @@ export async function prepareEmallRecords(client,{limit=5,categories,categoryMap
   throw error;
  }
  const dictionaryCache=new Map();
+ for(const {categoryId} of selections){
+  if(dictionaryCache.has(categoryId))continue;
+  try{
+   const result=await client.getCategoryProperties(categoryId);
+   dictionaryCache.set(categoryId,propertyDictionary(Array.isArray(result)?result:result?.properties));
+  }catch{dictionaryCache.set(categoryId,new Map());warn('PROPERTIES_UNAVAILABLE',{categoryId})}
+ }
+ // Only already selected categories contribute definitions. A global source ID
+ // may fill an absent definition when all observed names, types and value IDs agree.
+ const sharedDictionary=sharedPropertyDictionary(dictionaryCache);
  for(const [index,product] of products.entries()){
   const externalId=String(product.id),detail={externalId},categoryId=sourceInteger(product.category_id,1);
   const cat=selections[index].cat;
@@ -199,6 +228,7 @@ export async function prepareEmallRecords(client,{limit=5,categories,categoryMap
    if(['__proto__','prototype','constructor'].includes(key)||has(attrs,key)){warn('ATTRIBUTE_SKIPPED',detail);return}
    if(Object.keys(attrs).length>=30){warn('ATTRIBUTES_TRUNCATED',detail);return}
    attrs[key]=value;
+   return true;
   }
   for(const [field,label] of Object.entries({composition:'Состав',manufacturer_name:'Производитель',importer_name:'Импортёр',storage_period:'Условия и сроки хранения',service_centres:'Сервисные центры'})){
    if(product[field]!=null){
@@ -208,30 +238,27 @@ export async function prepareEmallRecords(client,{limit=5,categories,categoryMap
   }
   const warrantyUnits={days:'дн.',months:'мес.',years:'г.'},warranty=sourceInteger(product.warranty_value,1);
   if(warranty!==null&&has(warrantyUnits,product.warranty_unit))addAttribute('Гарантия',warranty+' '+warrantyUnits[product.warranty_unit]);
-  if(!dictionaryCache.has(categoryId)){
-   try{
-    const result=await client.getCategoryProperties(categoryId);
-    dictionaryCache.set(categoryId,propertyDictionary(Array.isArray(result)?result:result?.properties));
-   }catch{dictionaryCache.set(categoryId,new Map());warn('PROPERTIES_UNAVAILABLE',{categoryId})}
-  }
   const dictionary=dictionaryCache.get(categoryId);
   if(product.properties!=null&&!(Array.isArray(product.properties)&&product.properties.length===0)){
    if(!object(product.properties))throw new EmallAdapterError('INVALID_PRODUCT');
    for(const [propertyId,raw] of Object.entries(product.properties)){
     if(raw===null||raw===undefined)continue;
-    const id=sourceInteger(propertyId,1),definition=id===null?null:dictionary.get(id);
-    if(id!==null&&!definition){warn('PROPERTY_UNRESOLVED',detail);continue}
+    const id=sourceInteger(propertyId,1),ownDefinition=id===null?null:dictionary.get(id);
+    const fallback=id!==null&&!ownDefinition?sharedDictionary.get(id):null,definition=ownDefinition??fallback;
+    if(id!==null&&!definition){warn('PROPERTY_UNRESOLVED',{...detail,categoryId,propertyId:id});continue}
     const values=Array.isArray(raw)?raw:[raw],decoded=[];
     for(const value of values){
      if(value===null||value===undefined)continue;
      if(definition?.enumerated){
       const valueId=sourceInteger(value,0),label=valueId===null?'':definition.values.get(valueId);
-      if(label)decoded.push(label);else warn('PROPERTY_VALUE_UNRESOLVED',detail);
+      if(label)decoded.push(label);else warn('PROPERTY_VALUE_UNRESOLVED',{...detail,categoryId,propertyId:id});
      }else{
       const text=scalar(value);if(text)decoded.push(text);else warn('OPTIONAL_FIELD_SKIPPED',{...detail,field:'properties'});
      }
     }
-    addAttribute(definition?.name??propertyId,[...new Set(decoded)].join(', '));
+    if(addAttribute(definition?.name??propertyId,[...new Set(decoded)].join(', '))&&fallback){
+     warn('PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY',{...detail,propertyId:id,fromCategoryIds:fallback.fromCategoryIds});
+    }
    }
   }
   if(product.images!=null&&!Array.isArray(product.images))throw new EmallAdapterError('INVALID_PRODUCT');

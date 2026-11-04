@@ -9,11 +9,12 @@ import {prepareEmallImages,EmallMediaError} from '../server/emall-media.mjs';
 import {openStore,root} from '../server/store.mjs';
 import {loadDraftBundle} from '../server/draft-bundle.mjs';
 
-let staging,tempDatabase,store,preparedReview,sourceClient,output=resolve(root,'var/emall-prepared');
+let staging,tempDatabase,store,preparedReview,sourceClient,savedIds=false,output=resolve(root,'var/emall-prepared');
 try{
  const args=process.argv.slice(2);
  for(let i=0;i<args.length;i++){
   if(args[i]==='--output'&&args[i+1])output=resolve(args[++i]);
+  else if(args[i]==='--saved-ids'&&!savedIds)savedIds=true;
   else throw new Error('INVALID_ARGUMENT');
  }
  if(await stat(output).then(()=>true,()=>false))throw new Error('OUTPUT_EXISTS');
@@ -21,8 +22,27 @@ try{
  const seed=await readFile(join(root,'catalog-data.js'),'utf8');
  const categories=JSON.parse(seed.slice(seed.indexOf('window.catalogData = ')+'window.catalogData = '.length).trim().replace(/;$/,'')).categories;
  let categoryMap={};try{categoryMap=JSON.parse(await readFile(join(root,'data/emall-category-map.json'),'utf8'))}catch(error){if(error.code!=='ENOENT')throw new Error('CATEGORY_MAP_INVALID')}
+ let selectedIds;
+ if(savedIds){
+  try{
+   const manifest=JSON.parse(await readFile(join(root,'data/emall-drafts/manifest.json'),'utf8'));
+   const source={provider:'emall',environment:'production',account:'homeharmony-emall-main'};
+   if(!manifest.source||Object.keys(manifest.source).length!==3||Object.entries(source).some(([key,value])=>manifest.source[key]!==value)||!Array.isArray(manifest.products)||manifest.products.length!==5)throw new Error();
+   selectedIds=manifest.products.map(product=>{
+    const id=product?.externalId;
+    if(typeof id!=='string'||!/^[1-9]\d*$/.test(id)||!Number.isSafeInteger(Number(id)))throw new Error();
+    return id;
+   });
+   if(new Set(selectedIds).size!==5)throw new Error();
+  }catch{throw new Error('INVALID_MANIFEST')}
+ }
  sourceClient=createEmallClient();
- const prepared=await prepareEmallRecords(sourceClient,{limit:5,categories,categoryMap});
+ const preparationClient=savedIds?{...sourceClient,listProducts:async()=>{
+  const products=[];
+  for(const id of selectedIds)products.push((await sourceClient.getProduct(id)).product);
+  return {environment:'production',products,pagesRead:5,total:5};
+ }}:sourceClient;
+ const prepared=await prepareEmallRecords(preparationClient,{limit:5,categories,categoryMap});
  if(prepared.records.length!==5)throw new Error('EXPECTED_FIVE_PRODUCTS');
  preparedReview=prepared;
  const photos=await prepareEmallImages(prepared.imageJobs,{directory:staging,allowUnavailable:true});
@@ -43,7 +63,7 @@ try{
  if(process.env.GITHUB_STEP_SUMMARY)await writeFile(process.env.GITHUB_STEP_SUMMARY,'## Черновики Emall\n\n- Подготовлено карточек: 5\n- Загружено фотографий: '+report.photos+'\n- Предупреждений для проверки: '+report.warningCount+'\n- Опубликовано на витрине: 0\n\nПакет проверен в отдельной базе. На рабочий магазин он применяется после сохранения в репозитории.\n','utf8');
 }catch(error){
  const known=error instanceof EmallError||error instanceof EmallAdapterError||error instanceof EmallMediaError;
- const report={error:known?error.code:['INVALID_ARGUMENT','OUTPUT_EXISTS','CATEGORY_MAP_INVALID','EXPECTED_FIVE_PRODUCTS','DRAFT_VERIFICATION_FAILED','DUPLICATE_VERIFICATION_FAILED'].includes(error.message)?error.message:'PREPARATION_FAILED'};
+ const report={error:known?error.code:['INVALID_ARGUMENT','OUTPUT_EXISTS','CATEGORY_MAP_INVALID','INVALID_MANIFEST','EXPECTED_FIVE_PRODUCTS','DRAFT_VERIFICATION_FAILED','DUPLICATE_VERIFICATION_FAILED'].includes(error.message)?error.message:'PREPARATION_FAILED'};
  if(Number.isSafeInteger(error.categoryId))report.categoryId=error.categoryId;
  if(known&&typeof error.hostname==='string'&&/^[a-z0-9.-]+$/i.test(error.hostname))report.hostname=error.hostname;
  if(known&&Number.isInteger(error.status))report.status=error.status;

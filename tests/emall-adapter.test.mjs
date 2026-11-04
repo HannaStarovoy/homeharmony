@@ -169,6 +169,66 @@ test('property dictionaries are fetched once for each category and unknown enum 
  assert.equal(calls,1);assert.equal(result.records[0].attrs.Материал,'Шерсть');assert(!JSON.stringify(result.records).includes('12345'));
  assert(result.warnings.some(w=>w.code==='PROPERTY_VALUE_UNRESOLVED'));assert(result.warnings.some(w=>w.code==='PROPERTY_UNRESOLVED'));
 });
+function selectedCategoryClient(products,dictionaries){
+ const instance=client(products,{tree:[...sourceCategories,{id:20,name:'Хозяйственные товары'},{id:30,name:'Сладости'}]});
+ const calls=[];
+ instance.getCategoryProperties=async categoryId=>{calls.push(categoryId);const result=dictionaries.get(categoryId);if(result instanceof Error)throw result;return {properties:result??[]}};
+ return {instance,calls};
+}
+test('selected category definitions fill missing global IDs in both source orders without extra dictionary reads',async()=>{
+ const cap={...card(1),properties:{150:'25'}},cleaning={...card(2),category_id:20,properties:{149:[1]}};
+ const dictionaries=new Map([[11,[definitions[0]]],[20,[definitions[1]]]]);
+ for(const products of [[cap,cleaning,{...cap,id:3}],[cleaning,cap]]){
+  const {instance,calls}=selectedCategoryClient(products,dictionaries),result=await prepare(instance);
+  const capRecord=result.records.find(product=>product.externalId==='1'),cleaningRecord=result.records.find(product=>product.externalId==='2');
+  assert.equal(capRecord.attrs['Длина, см'],'25');assert.equal(cleaningRecord.attrs.Материал,'Шерсть');
+  assert.deepEqual(calls,[...new Set(products.map(product=>product.category_id))]);
+  assert.deepEqual(result.warnings.filter(w=>w.externalId==='1'),[{code:'PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY',externalId:'1',propertyId:150,fromCategoryIds:[20]}]);
+  assert.deepEqual(result.warnings.filter(w=>w.externalId==='2'),[{code:'PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY',externalId:'2',propertyId:149,fromCategoryIds:[11]}]);
+ }
+});
+test('fallback unites consistent enum subsets including zero-valued IDs and records every contributing category',async()=>{
+ const row=(values)=>({id:999,name:'Покрытие',property:{type:{name:'multiselect_list'},values}});
+ const products=[{...card(1),properties:{999:[0,2]}},{...card(2),category_id:20,properties:{}},{...card(3),category_id:30,properties:{}}];
+ const {instance}=selectedCategoryClient(products,new Map([[11,[]],[20,[row([{id:0,value:'Первый'}])]],[30,[row([{id:2,value:'Второй'}])]]]));
+ const result=await prepare(instance);assert.equal(result.records[0].attrs.Покрытие,'Первый, Второй');
+ assert.deepEqual(result.warnings,[{code:'PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY',externalId:'1',propertyId:999,fromCategoryIds:[20,30]}]);
+});
+test('conflicting names, types, or enum labels prevent shared fallback rather than guessing a definition',async()=>{
+ const row=(name='Ширина',type='number',values=[])=>({id:999,name,property:{type:{name:type},values}});
+ const candidates=[
+  [row(),row('Высота')],
+  [row(),row('Ширина','string')],
+  [row('Цвет','list',[{id:1,value:'Белый'}]),row('Цвет','list',[{id:1,value:'Синий'}])],
+  [row('Цвет','list',[{id:1,value:'Белый'},{id:1,value:'Синий'}]),row('Цвет','list',[{id:1,value:'Белый'}])]
+ ];
+ for(const [first,second] of candidates){
+  const products=[{...card(1),properties:{999:[1]}},{...card(2),category_id:20,properties:{}},{...card(3),category_id:30,properties:{}}];
+  const {instance}=selectedCategoryClient(products,new Map([[11,[]],[20,[first]],[30,[second]]]));
+  const result=await prepare(instance);assert.deepEqual(result.records[0].attrs,{Состав:'Шерсть, хлопок',Производитель:'Тестовый производитель'});
+  assert.deepEqual(result.warnings,[{code:'PROPERTY_UNRESOLVED',externalId:'1',categoryId:11,propertyId:999}]);
+ }
+});
+test('own category definitions take precedence and missing enum choices are not borrowed from another category',async()=>{
+ const products=[{...card(1),properties:{149:[2]}},{...card(2),category_id:20,properties:{}}];
+ const own={...definitions[0],property:{type:{name:'list'},values:[{id:1,value:'Шерсть'}]}};
+ const other={...definitions[0],name:'Другое имя',property:{type:{name:'list'},values:[{id:2,value:'Хлопок'}]}};
+ const {instance}=selectedCategoryClient(products,new Map([[11,[own]],[20,[other]]]));
+ const result=await prepare(instance);assert.equal(result.records[0].attrs.Материал,undefined);assert.equal(result.records[0].attrs['Другое имя'],undefined);
+ assert.deepEqual(result.warnings,[{code:'PROPERTY_VALUE_UNRESOLVED',externalId:'1',categoryId:11,propertyId:149}]);
+});
+test('empty multiselect dictionaries never render raw enum IDs and an unavailable selected category can use a verified definition',async()=>{
+ const empty={id:149,name:'Материал',property:{type:{name:'multiselect_list'},values:[]}};
+ const result=await prepare(client([{...card(1),properties:{149:[12345]}}],{properties:[empty]}));
+ assert.equal(result.records[0].attrs.Материал,undefined);assert(!JSON.stringify(result.records).includes('12345'));
+ assert.deepEqual(result.warnings,[{code:'PROPERTY_VALUE_UNRESOLVED',externalId:'1',categoryId:11,propertyId:149}]);
+ const products=[{...card(1),properties:{150:'25',999:12345}},{...card(2),category_id:20,properties:{}}];
+ const {instance,calls}=selectedCategoryClient(products,new Map([[11,new Error('PRIVATE_API_MESSAGE')],[20,[definitions[1]]]]));
+ const recovered=await prepare(instance);assert.equal(recovered.records[0].attrs['Длина, см'],'25');assert.deepEqual(calls,[11,20]);
+ assert(recovered.warnings.some(w=>w.code==='PROPERTIES_UNAVAILABLE'&&w.categoryId===11));
+ assert(recovered.warnings.some(w=>w.code==='PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY'&&w.propertyId===150));
+ assert(recovered.warnings.some(w=>w.code==='PROPERTY_UNRESOLVED'));assert(!JSON.stringify(recovered).includes('PRIVATE_API_MESSAGE'));assert(!JSON.stringify(recovered.records).includes('12345'));
+});
 test('HTML descriptions become readable plain text with common entities and scripts removed',async()=>{
  const description='<p>А &amp; Б&nbsp;&#8212; &#x43C;&#1080;&#1088;.</p><script>privateScript()</script><style>secret { color:red }</style><p>Следующая<br>строка &quot;тест&quot;.</p>';
  const result=await prepare(client([{...card(1),description}]));
