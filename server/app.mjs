@@ -102,6 +102,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
         return send(res,200,await readFile(join(store.uploadDir,media.filename)),'image/webp');
       }
       if(path==='/assets/everyday-hero.webp')return send(res,200,await readFile(join(root,'assets/everyday-hero.webp')),'image/webp');
+      if(path==='/assets/editorial-hero.webp')return send(res,200,await readFile(join(root,'assets/editorial-hero.webp')),'image/webp');
       const files={'/':'index.html','/index.html':'index.html','/storefront.css':'storefront.css','/admin':'admin/index.html','/admin/':'admin/index.html','/admin/app.js':'admin/app.js','/admin/style.css':'admin/style.css'};
       const file=files[path];
       if (!file) throw new Problem(404,'Адрес не найден.');
