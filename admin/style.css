@@ -248,3 +248,14 @@ p { line-height: 1.7; }
 @media (prefers-reduced-motion: reduce) {
   *, *:before, *:after { scroll-behavior: auto !important; transition: none !important; }
 }
+
+.bulk-toolbar [hidden] { display: none; }
+.bulk-toolbar input[type=number] { width: 210px; }
+.toolbar input[type=checkbox] { width: 22px; min-height: 22px; accent-color: var(--blue); }
+.toolbar label:has(#review-filter) { display: inline-flex; align-items: center; gap: 10px; white-space: nowrap; }
+.toolbar #review-filter { flex: 0 0 22px; width: 22px; min-width: 22px; height: 22px; margin: 0; }
+.price-preview { width: min(850px, calc(100% - 32px)); max-height: 90vh; padding: 28px; border: 1px solid var(--line); border-radius: 14px; color: var(--ink); background: var(--surface); }
+.price-preview::backdrop { background: #201d1980; }
+.price-preview-list { max-height: 52vh; overflow: auto; padding: 0 14px; border: 1px solid var(--line); border-radius: 8px; overflow-wrap: anywhere; }
+.price-preview-list p { padding: 10px 0; margin: 0; border-bottom: 1px solid var(--line); }
+.price-preview .actions { margin-top: 22px; }

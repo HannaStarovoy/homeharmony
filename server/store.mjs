@@ -132,15 +132,22 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     }catch(error){if(!withinTransaction)db.exec('ROLLBACK');throw error}
   }
   function bulkProducts(input){
-    if(!input||!['publish','draft','delete'].includes(input.action)||!Array.isArray(input.products)||!input.products.length||input.products.length>5000)throw new Problem(422,'Выберите товары и действие.');
+    if(!input||!['publish','draft','delete','category','price'].includes(input.action)||!Array.isArray(input.products)||!input.products.length||input.products.length>5000)throw new Problem(422,'Выберите товары и действие.');
     const ids=new Set();for(const item of input.products){if(!item||typeof item.id!=='string'||!Number.isSafeInteger(item.version)||item.version<1||ids.has(item.id))throw new Problem(422,'Некорректный список выбранных товаров.');ids.add(item.id)}
     orders.expire();db.exec('BEGIN IMMEDIATE');
     try{
       const all=new Map(products(false,{expire:false}).map(p=>[p.id,p]));
       const chosen=input.products.map(item=>{const p=all.get(item.id);if(!p)throw new Problem(409,'Один из выбранных товаров удалён. Обновите список.');if(p.version!==item.version)throw new Problem(409,'Один из выбранных товаров изменён. Обновите список и выберите товары заново.');return p});
+      if(input.action==='category'&&!categories().some(c=>c.id===input.category&&c.id!=='all'))throw new Problem(422,'Выберите категорию.');
+      if(input.action==='price'&&(!['amount','percent'].includes(input.mode)||typeof input.amount!=='number'||!Number.isFinite(input.amount)||Math.abs(input.amount)>1000000))throw new Problem(422,'Укажите корректное изменение цены.');
       let changed=0;
       for(const p of chosen){
         if(input.action==='delete'){deleteProduct(p.id,p.version,{withinTransaction:true});changed++}
+        else if(input.action==='category'){saveProduct({...p,cat:input.category},p.id,{withinTransaction:true,returnProduct:false});changed++}
+        else if(input.action==='price'){
+          const variants=p.variants.map(v=>{const price=Math.round((input.mode==='percent'?v.price*(1+input.amount/100):v.price+input.amount)*100)/100;if(!Number.isFinite(price)||price<=0)throw new Problem(422,'Новая цена должна быть больше нуля.');return {...v,price,old:v.old>price?v.old:0}});
+          saveProduct({...p,variants},p.id,{withinTransaction:true,returnProduct:false});changed++;
+        }
         else{const status=input.action==='publish'?'published':'draft';if(p.status!==status){saveProduct({...p,status},p.id,{withinTransaction:true,returnProduct:false});changed++}}
       }
       db.exec('COMMIT');return {ok:true,selected:chosen.length,changed};
