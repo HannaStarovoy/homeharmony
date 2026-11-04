@@ -45,7 +45,7 @@ test('draft creation persists products and separate SKU rows without exposing dr
  assert(!(await request('/api/catalog',{authenticated:false})).data.products.some(p=>p.id===draft.id));
 });
 test('invalid prices, stock, category, dimensions, photos and duplicate options are rejected',async()=>{
- const changes=[p=>p.cat='unknown',p=>p.variants[0].price=-1,p=>p.variants[0].price=1.999,p=>p.variants[0].stock=1.5,p=>p.images=['https://example.test/image.png'],p=>p.variants.push({...p.variants[0],sku:'SECOND'}),p=>p.variants.push({...p.variants[0],sku:'SECOND',options:{Размер:'M'}}),p=>p.variants[0].old=10,p=>{p.status='published';p.variants[0].price=0}];
+ const changes=[p=>p.cat='unknown',p=>p.variants[0].price=-1,p=>p.variants[0].price=1.999,p=>p.variants[0].stock=1.5,p=>p.images=['https://example.test/image.png'],p=>p.variants.push({...p.variants[0],sku:'SECOND'}),p=>p.variants.push({...p.variants[0],sku:'SECOND',options:{Размер:'M'}}),p=>{p.status='published';p.variants[0].price=0}];
  for(const change of changes){const value=product('INVALID');change(value);assert.equal((await request('/api/admin/products',{method:'POST',body:value})).status,422)}
  assert.equal(app.store.products().length,15);
 });

@@ -304,3 +304,18 @@ p { line-height: 1.7; }
 .quick-product-list td:last-child .btn + .btn { margin-top: 3px; }
 .quick-product-list td:last-child { min-width: 210px; }
 .quick-product-list td:last-child .btn { padding: 6px 7px; font-size: 12px; }
+/* A slightly denser workspace while keeping touch targets usable. */
+:root { font-size: 15px; }
+.topbar .wrap { min-height: 62px; padding-top: 7px; padding-bottom: 7px; }
+.brand-copy strong { font-size: 18px; }
+.page:has(.overview) { padding-top: 14px; }
+.page:has(.overview) > .heading { margin-bottom: 12px; }
+.page:has(.overview) .heading h1 { font-size: 29px; }
+.metric { padding: 9px 12px; }
+.metric strong { font-size: 23px; }
+.overview { margin-bottom: 12px; }
+.bulk-toolbar { padding: 8px 10px; gap: 8px; margin-bottom: 12px; }
+.quick-product-list th, .quick-product-list td { padding: 10px 8px; }
+.quick-product-list input[type=number] { min-height: 40px; padding: 8px 10px; font-size: 16px; }
+.quick-product-list .thumb { width: 50px; height: 64px; }
+.price-preview-list section { padding: 14px 0; border-bottom: 1px solid var(--line); }

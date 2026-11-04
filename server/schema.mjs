@@ -8,3 +8,7 @@ export const templates = {
   creams: { attributes: ['Назначение', 'Тип кожи', 'Состав', 'Способ применения'], dimensions: ['Объём'] },
   shampoos: { attributes: ['Назначение', 'Тип волос', 'Состав', 'Способ применения'], dimensions: ['Объём'] },
 };
+
+for(const template of Object.values(templates)){
+ template.attributes=[...new Set([...template.attributes,'Производитель','Страна производства'])];
+}
