@@ -13,7 +13,7 @@ const MESSAGES={
  PAGINATION_ERROR:'Emall вернул противоречивые страницы или повторяющиеся товары.'
 };
 // Diagnostics contain only fixed schema paths and type labels, never response data or keys.
-const DIAGNOSTIC_FIELDS=new Set(['response','response.status','response.body','response.json','success','data','meta','meta.total','meta.count','meta.per_page','meta.current_page','meta.total_pages','meta.last_page','data[]','data[].id','data[].name','data[].category_id','data[].stock','data[].inner_article','data[].description','data[].images','data[].images[]','data[].properties','data[].prices','data[].prices.price','data[].prices.old_price']);
+const DIAGNOSTIC_FIELDS=new Set(['response','response.status','response.body','response.json','success','data','meta','meta.total','meta.count','meta.per_page','meta.current_page','meta.total_pages','meta.last_page','data[]','data[].id','data[].name','data[].title','data[].category_id','data[].stock','data[].product_stock','data[].product_price','data[].product_price.price','data[].product_price.red_price','data[].product_price.old_price','data[].inner_article','data[].description','data[].images','data[].images[]','data[].properties','data[].prices','data[].prices.price','data[].prices.old_price']);
 const DIAGNOSTIC_EXPECTED=new Set(['object','array','string','nonempty-string','string-or-null','array-or-null','object-or-null-or-empty-array','positive-integer','nonnegative-integer','http-status','JSON','not-false','count-matches-data','consistent-pagination','requested-page','requested-id','stable-total','stable-page-size','unique-id']);
 const DIAGNOSTIC_ACTUAL=new Set(['missing','null','array','object','string','integer','number','boolean','bigint','symbol','function','non-JSON']);
 function safeDiagnostic(value){
@@ -80,6 +80,17 @@ function validateProduct(product){
   if(has(product.prices,'old_price')&&product.prices.old_price!==null)readInteger(product.prices.old_price,'data[].prices.old_price');
  }
 }
+function validateProductInfo(product){
+ if(!record(product))invalid('data[]','object',product);
+ readInteger(product.id,'data[].id',1);
+ if(has(product,'title')&&(typeof product.title!=='string'||!product.title.trim()))invalid('data[].title','nonempty-string',product.title);
+ // An audit requires explicit source quantities and prices. Preserve the raw
+ // values; the short-info docs do not define red_price as an effective price.
+ readInteger(product.product_stock,'data[].product_stock');
+ if(!record(product.product_price))invalid('data[].product_price','object',product.product_price);
+ readInteger(product.product_price.price,'data[].product_price.price',1);
+ for(const field of ['red_price','old_price'])if(has(product.product_price,field)&&product.product_price[field]!==null)readInteger(product.product_price[field],'data[].product_price.'+field);
+}
 function validatePage(payload,page,validateItem=validateProduct){
  if(!record(payload))invalid('response.json','object',payload);
  if(payload.success===false)invalid('success','not-false',payload.success);
@@ -145,10 +156,10 @@ export function createEmallClient({token,environment='production',transport=curl
  const credential=token===undefined?process.env[environment==='sandbox'?'EMALL_SANDBOX_API_TOKEN':'EMALL_API_TOKEN']:token;
  if(typeof credential!=='string'||!credential.trim())throw new EmallError('TOKEN_MISSING');
  if(credential.length>4096||/[\s\x00-\x1f\x7f]/.test(credential))throw new EmallError('INVALID_CONFIG');
- async function getProduct(productId){
+ async function readProduct(productId,path,validateItem){
   const id=sourceInteger(productId,1);
   if(id===null)throw new EmallError('INVALID_CONFIG');
-  const url=new URL('/open/api/v1/products/'+id,'https://'+HOSTS[environment]);
+  const url=new URL(path+id,'https://'+HOSTS[environment]);
   let response;
   try{response=await transport({url:url.href,headers:{Accept:'application/json',Authorization:'Bearer '+credential}})}
   catch(error){throw new EmallError(error instanceof EmallError?error.code:'NETWORK',error instanceof EmallError?error.status:null,error instanceof EmallError?error.diagnostic:null)}
@@ -165,11 +176,13 @@ export function createEmallClient({token,environment='production',transport=curl
    // The documented detail response is a direct product; an object data envelope is compatible.
    const product=has(payload,'data')?payload.data:payload;
    if(has(payload,'data')&&!record(product))invalid('data','object',product);
-   validateProduct(product);
+   validateItem(product);
    if(sourceInteger(product.id,1)!==id)invalid('data[].id','requested-id',product.id);
    return {environment,product};
   }catch(error){throw new EmallError(error instanceof EmallError?error.code:'INVALID_RESPONSE',response.status,error instanceof EmallError?error.diagnostic:null)}
  }
+ function getProduct(productId){return readProduct(productId,'/open/api/v1/products/',validateProduct)}
+ function getProductInfo(productId){return readProduct(productId,'/open/api/v1/products/short/info/',validateProductInfo)}
  async function listProducts({limit=5}={}){
   if(!integer(limit,1)||limit>5000)throw new EmallError('INVALID_CONFIG');
   const products=[],seen=new Set(),perPage=Math.min(limit,100);
@@ -264,5 +277,5 @@ export function createEmallClient({token,environment='production',transport=curl
   }
   return readDictionary('/open/api/v1/configurator/categories/'+id+'/properties','properties',validateProperty);
  }
- return {listProducts,getProduct,getCatalogCategories,getCategoryProperties};
+ return {listProducts,getProduct,getProductInfo,getCatalogCategories,getCategoryProperties};
 }

@@ -9,6 +9,7 @@ import {join,delimiter} from 'node:path';
 import {createEmallClient,EmallError} from '../server/emall.mjs';
 const token='fictional-test-secret-not-an-api-key';
 const card=id=>({id,name:'Искусственный товар '+id,category_id:123,inner_article:'TEST-'+id,description:'Только unit test',images:['https://api-sandbox.emall.by/storage/images/fixture.jpg'],properties:{'149':[11022]},prices:{price:2000,old_price:2100},stock:3});
+const productInfo=id=>({id,title:'Искусственный товар '+id,article:'TEST-'+id,barcode:'4810000000001',product_stock:3,product_price:{price:2000,red_price:1800,old_price:2100}});
 function page(data,{total=data.length,current=1,perPage=5}={}){return {status:200,body:JSON.stringify({data,meta:{total,count:data.length,current_page:current,per_page:perPage,total_pages:Math.ceil(total/perPage)||1}})}}
 const client=transport=>createEmallClient({token,transport});
 const errorCode=code=>error=>error instanceof EmallError&&error.code===code;
@@ -83,6 +84,65 @@ test('product detail transport failures, redirects and malformed bodies stay bou
   assert.deepEqual(error.diagnostic,{field:'data[].stock',expected:'nonnegative-integer',actual:'string'});
   assert(!JSON.stringify(error).includes(token));return error.code==='INVALID_RESPONSE';
  });
+});
+test('short product info reads one fixed source ID and preserves raw stock and every price without interpreting red_price',async()=>{
+ const raw={...productInfo('0001'),product_stock:'0',product_price:{price:'2000',red_price:'1800',old_price:null}};
+ for(const payload of [raw,{data:raw},{success:true,data:raw}]){
+  const requests=[];
+  const result=await client(async request=>{requests.push(request);return {status:200,body:JSON.stringify(payload)}}).getProductInfo('0001');
+  assert.deepEqual(result,{environment:'production',product:raw});
+  assert.equal(requests.length,1);assert.equal(requests[0].url,'https://api.emall.by/open/api/v1/products/short/info/1');
+  assert.deepEqual(requests[0].headers,{Accept:'application/json',Authorization:'Bearer '+token});
+ }
+ const result=await createEmallClient({token,environment:'sandbox',transport:async request=>{
+  assert.equal(request.url,'https://api-sandbox.emall.by/open/api/v1/products/short/info/1');return {status:200,body:JSON.stringify(productInfo(1))};
+ }}).getProductInfo(1);
+ assert.equal(result.environment,'sandbox');assert.equal(result.product.product_price.price,2000);assert.equal(result.product.product_price.red_price,1800);
+});
+test('short product info rejects unsafe IDs without transport or endpoint fallback',async()=>{
+ let calls=0;
+ const instance=client(async request=>{calls++;return {status:200,body:JSON.stringify(productInfo(Number(new URL(request.url).pathname.split('/').at(-1))))}});
+ for(const id of [undefined,null,true,false,0,'0',-1,1.5,NaN,Infinity,'',' ',' 1','1 ','+1','1.0','1e0','0x1','1x','1/../../products','1?token=secret','1#fragment','%31','https://other.example','9007199254740992',Number.MAX_SAFE_INTEGER+1,[],{}])await assert.rejects(instance.getProductInfo(id),errorCode('INVALID_CONFIG'));
+ assert.equal(calls,0);
+ assert.equal((await instance.getProductInfo(Number.MAX_SAFE_INTEGER)).product.id,Number.MAX_SAFE_INTEGER);assert.equal(calls,1);
+});
+test('short product info requires explicit valid quantity and main price instead of creating default availability or money',async()=>{
+ const malformed=[undefined,null,true,false,'',' ',' 3','3 ','+3','-3','3.0','3e0','0x3','3x','9007199254740992',Number.MAX_SAFE_INTEGER+1,3.5,-1,[],{}];
+ for(const value of malformed)for(const field of ['product_stock','price']){
+  const raw=productInfo(1);if(field==='product_stock')raw.product_stock=value;else raw.product_price.price=value;
+  await assert.rejects(client(async()=>({status:200,body:JSON.stringify(raw)})).getProductInfo(1),error=>{
+   assert.equal(error.status,200);assert.equal(error.diagnostic.field,field==='product_stock'?'data[].product_stock':'data[].product_price.price');
+   return error.code==='INVALID_RESPONSE';
+  });
+ }
+ for(const value of [0,'0'])await assert.rejects(client(async()=>({status:200,body:JSON.stringify({...productInfo(1),product_price:{price:value}})})).getProductInfo(1),errorCode('INVALID_RESPONSE'));
+ for(const product_price of [undefined,null,[],{},'private'])await assert.rejects(client(async()=>({status:200,body:JSON.stringify({...productInfo(1),product_price})})).getProductInfo(1),errorCode('INVALID_RESPONSE'));
+ const minimum={id:1,product_stock:0,product_price:{price:1}};
+ assert.deepEqual((await client(async()=>({status:200,body:JSON.stringify(minimum)})).getProductInfo(1)).product,minimum);
+ for(const field of ['red_price','old_price'])for(const value of [null,0,'0',2100]){
+  const raw={...minimum,product_price:{price:1,[field]:value}};
+  assert.deepEqual((await client(async()=>({status:200,body:JSON.stringify(raw)})).getProductInfo(1)).product,raw);
+ }
+ for(const field of ['red_price','old_price'])await assert.rejects(client(async()=>({status:200,body:JSON.stringify({...minimum,product_price:{price:1,[field]:'private'}})})).getProductInfo(1),error=>error.code==='INVALID_RESPONSE'&&error.diagnostic.field==='data[].product_price.'+field);
+});
+test('short product info validates matching IDs and object envelopes with fixed private diagnostics',async()=>{
+ for(const payload of [null,[],{}, {data:null},{data:[]},{data:{}},{success:false,data:productInfo(1)},productInfo(2),{data:productInfo(2)},{...productInfo(1),id:'1x'},{...productInfo(1),title:' '}])await assert.rejects(client(async()=>({status:200,body:JSON.stringify(payload)})).getProductInfo(1),errorCode('INVALID_RESPONSE'));
+ const privateText='private-response '+token;
+ await assert.rejects(client(async()=>({status:200,body:JSON.stringify({...productInfo(1),product_stock:privateText,[privateText]:privateText})})).getProductInfo(1),error=>{
+  assert.deepEqual(error.diagnostic,{field:'data[].product_stock',expected:'nonnegative-integer',actual:'string'});assert(!JSON.stringify(error).includes(privateText));assert(!String(error.stack).includes(token));return error.code==='INVALID_RESPONSE';
+ });
+ await assert.rejects(client(async()=>({status:200,body:JSON.stringify(productInfo('0002'))})).getProductInfo(1),error=>{
+  assert.deepEqual(error.diagnostic,{field:'data[].id',expected:'requested-id',actual:'string'});return error.code==='INVALID_RESPONSE';
+ });
+});
+test('short product info transport errors and redirects remain bounded without exposing keys or response data',async()=>{
+ const privateText='private-response '+token;
+ for(const status of [301,302,307,308,401,403,404,429,500]){
+  let calls=0;await assert.rejects(client(async()=>{calls++;return {status,body:privateText}}).getProductInfo(1),error=>error.code==='HTTP_ERROR'&&error.status===status&&!String(error.stack).includes(token));assert.equal(calls,1);
+ }
+ await assert.rejects(client(async()=>{throw new Error(privateText)}).getProductInfo(1),error=>error.code==='NETWORK'&&!String(error.stack).includes(token)&&!Object.hasOwn(error,'cause'));
+ for(const response of [null,{}, {status:'200',body:'{}'},{status:600,body:'{}'}, {status:200,body:{}},{status:200,body:'<html>'+privateText+'</html>'}])await assert.rejects(client(async()=>response).getProductInfo(1),error=>error.code==='INVALID_RESPONSE'&&!JSON.stringify(error).includes(token));
+ await assert.rejects(client(async()=>({status:200,body:'x'.repeat(5*1024*1024+1)})).getProductInfo(1),errorCode('RESPONSE_TOO_LARGE'));
 });
 test('a production default token cannot fall back into sandbox; sandbox uses its distinct binding',async()=>{
  const code=`import assert from 'node:assert/strict';import{createEmallClient}from'./server/emall.mjs';
@@ -257,25 +317,25 @@ assert.deepEqual(process.argv.slice(2),['--disable','--config','-']);
 const config=readFileSync(0,'utf8');
 assert(config.includes('header = "Authorization: Bearer fictional-curl-secret"'));
 assert(config.includes('header = "Accept: application/json"'));
-assert(config.includes('url = "https://api.emall.by/open/api/v1/products'+(process.env.FAKE_CURL_DETAIL==='yes'?'/1':'?page=1&perPage=5')+'"'));
+assert(config.includes('url = "https://api.emall.by/open/api/v1/products'+(process.env.FAKE_CURL_DETAIL==='info'?'/short/info/1':process.env.FAKE_CURL_DETAIL==='yes'?'/1':'?page=1&perPage=5')+'"'));
 assert(config.includes('request = "GET"'));assert(config.includes('proto = "=https"'));assert(config.includes('proto-redir = "=https"'));
 assert(config.includes('max-redirs = 0'));assert(config.includes('max-filesize = 5242880'));assert(config.includes('max-time = 30'));
 assert(!/^(?:location|insecure|verbose|trace|trace-ascii)\\b/m.test(config));
 appendFileSync(process.env.FAKE_CURL_LOG,'called\\n');
-process.stdout.write((process.env.FAKE_CURL_DETAIL==='yes'?${JSON.stringify(JSON.stringify(card(1)))}:${JSON.stringify(page([card(1)]).body)})+'\\n'+process.env.FAKE_CURL_STATUS);
+process.stdout.write((process.env.FAKE_CURL_DETAIL==='info'?${JSON.stringify(JSON.stringify(productInfo(1)))}:process.env.FAKE_CURL_DETAIL==='yes'?${JSON.stringify(JSON.stringify(card(1)))}:${JSON.stringify(page([card(1)]).body)})+'\\n'+process.env.FAKE_CURL_STATUS);
 `;
   // .mjs keeps the executable fixture an ES module independent of the temp directory.
   await writeFile(join(dir,'fake-curl.mjs'),executable,{mode:0o700});
   await writeFile(join(dir,'curl'),`#!${process.execPath}\nawait import(${JSON.stringify(new URL('file://'+join(dir,'fake-curl.mjs')).href)});\n`,{mode:0o700});
-  for(const detail of ['no','yes'])for(const status of ['200','302']){
+  for(const detail of ['no','yes','info'])for(const status of ['200','302']){
    const code=`import assert from 'node:assert/strict';import{createEmallClient}from'./server/emall.mjs';
-const instance=createEmallClient();const run=process.env.FAKE_CURL_DETAIL==='yes'?instance.getProduct('0001'):instance.listProducts();
+const instance=createEmallClient();const run=process.env.FAKE_CURL_DETAIL==='info'?instance.getProductInfo('0001'):process.env.FAKE_CURL_DETAIL==='yes'?instance.getProduct('0001'):instance.listProducts();
 if(process.env.FAKE_CURL_STATUS==='302')await assert.rejects(run,e=>e.code==='HTTP_ERROR'&&e.status===302);
-else{const result=await run;if(process.env.FAKE_CURL_DETAIL==='yes')assert.equal(result.product.id,1);else{assert.equal(result.products.length,1);assert.equal(result.products[0].id,1);assert.equal(result.pagesRead,1)}}console.log('PASS');`;
+else{const result=await run;if(process.env.FAKE_CURL_DETAIL!=='no')assert.equal(result.product.id,1);else{assert.equal(result.products.length,1);assert.equal(result.products[0].id,1);assert.equal(result.pagesRead,1)}}console.log('PASS');`;
    const {stdout}=await promisify(execFile)(process.execPath,['--input-type=module','-e',code],{cwd:new URL('../',import.meta.url),env:{...process.env,PATH:dir+delimiter+process.env.PATH,EMALL_API_TOKEN:'fictional-curl-secret',EMALL_SANDBOX_API_TOKEN:'',FAKE_CURL_LOG:log,FAKE_CURL_STATUS:status,FAKE_CURL_DETAIL:detail}});
    assert.equal(stdout.trim(),'PASS');
   }
-  assert.equal(await readFile(log,'utf8'),'called\ncalled\ncalled\ncalled\n');
+  assert.equal(await readFile(log,'utf8'),'called\n'.repeat(6));
  }finally{await rm(dir,{recursive:true,force:true})}
 });
 
