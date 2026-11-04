@@ -66,6 +66,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     if(expire)orders.expire();
     const rows = db.prepare(`SELECT * FROM products WHERE deleted_at IS NULL ${publishedOnly ? "AND status='published'" : ''} ORDER BY date_rank DESC, id`).all();
     const variants = db.prepare('SELECT * FROM variants ORDER BY position').all();
+    const emallIds=new Map(db.prepare("SELECT product_id,external_id FROM import_products WHERE provider='emall'").all().map(row=>[row.product_id,row.external_id]));
     const sources=new Map(db.prepare('SELECT sku,external_sku FROM import_variants').all().map(row=>[row.sku,row.external_sku]));
     const byProduct = new Map();
     for (const v of variants) {
@@ -75,7 +76,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     return rows.map(p => {
       const list = byProduct.get(p.id) || [];
       const value = {id:p.id,name:p.name,cat:p.category_id,summary:p.summary,attrs:JSON.parse(p.attrs),images:JSON.parse(p.images),type:p.type,tag:p.tag,pop:p.popularity,date:p.date_rank,price:Math.min(...list.map(v=>v.price)),old:list[0]?.old||0,variants:list};
-      return publishedOnly ? value : {...value,status:p.status,version:p.version,updatedAt:p.updated_at};
+      return publishedOnly ? value : {...value,status:p.status,version:p.version,updatedAt:p.updated_at,...(emallIds.has(p.id)?{emallId:emallIds.get(p.id)}:{})};
     });
   }
   function saveProduct(input,id,{withinTransaction=false,returnProduct=true}={}) {
