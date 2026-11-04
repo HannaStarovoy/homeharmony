@@ -1,15 +1,24 @@
 // Artificial API responses for the five committed source IDs; no live API or shop DB.
 import {test} from 'node:test';
 import assert from 'node:assert/strict';
-import {mkdtemp,writeFile,readFile,rm,lstat} from 'node:fs/promises';
+import {mkdtemp,writeFile,readFile,rm,lstat,mkdir,copyFile} from 'node:fs/promises';
 import {join,delimiter} from 'node:path';
 import {tmpdir} from 'node:os';
 import {spawnSync} from 'node:child_process';
 const root=new URL('../',import.meta.url);
-const manifest=JSON.parse(await readFile(new URL('../data/emall-drafts/manifest.json',import.meta.url),'utf8'));
+const committed=JSON.parse(await readFile(new URL('../data/emall-drafts/manifest.json',import.meta.url),'utf8'));
+// Only the approved IDs come from the real bundle; all compared quantities are synthetic.
+const manifest={version:1,source:committed.source,products:committed.products.map(({externalId})=>({externalId,variants:[{price:12.34,old:0,stock:5}]}))};
 const testToken='FICTIONAL_REVIEW_TOKEN';
 async function fixture({failId=false,tooManyValues=false}={}){
  const directory=await mkdtemp(join(tmpdir(),'homeharmony-review-cli-'));
+ const project=join(directory,'project');
+ await Promise.all(['scripts','server','data/emall-drafts'].map(path=>mkdir(join(project,path),{recursive:true})));
+ await Promise.all([
+  copyFile(new URL('scripts/review-emall-drafts.mjs',root),join(project,'scripts/review-emall-drafts.mjs')),
+  copyFile(new URL('server/emall.mjs',root),join(project,'server/emall.mjs')),
+  writeFile(join(project,'data/emall-drafts/manifest.json'),JSON.stringify(manifest)+'\n')
+ ]);
  const cards=manifest.products.map((product,index)=>({id:Number(product.externalId),name:'Synthetic card',category_id:123,stock:product.variants[0].stock+(index===0?1:0),prices:{price:Math.round(product.variants[0].price*100)+(index===0?100:0),old_price:index===1?Math.round(product.variants[0].price*100):Math.round((product.variants[0].old||0)*100)},properties:{149:[23227],999:[100],150:tooManyValues?Array(51).fill(1):'<b>'+testToken+'</b><script>PRIVATE_SCRIPT</script>',888:null},warehouse_stock:7,available_stock:3,reserved:4,secret:'PRIVATE_UNKNOWN',images:['https://private.invalid/image'],auth:{token:'PRIVATE_UNKNOWN'}}));
  const script='#!'+process.execPath+'\n'+`
 const fs=require('node:fs');
@@ -29,7 +38,7 @@ process.stdout.write(JSON.stringify(payload)+'\\n200');
 `;
  await writeFile(join(directory,'curl'),script,{mode:0o700});
  const output=join(directory,'result'),summary=join(directory,'summary.md');
- const run=()=>spawnSync(process.execPath,['scripts/review-emall-drafts.mjs','--output',output],{cwd:root,env:{...process.env,PATH:directory+delimiter+process.env.PATH,EMALL_API_TOKEN:testToken,GITHUB_STEP_SUMMARY:summary},encoding:'utf8',timeout:20000});
+ const run=()=>spawnSync(process.execPath,['scripts/review-emall-drafts.mjs','--output',output],{cwd:project,env:{...process.env,PATH:directory+delimiter+process.env.PATH,EMALL_API_TOKEN:testToken,GITHUB_STEP_SUMMARY:summary},encoding:'utf8',timeout:20000});
  return {directory,output,summary,run,requests:join(directory,'requests.jsonl')};
 }
 test('review reads only five approved IDs, reports drift and unresolved dictionary identity, and leaks no arbitrary fields',async()=>{

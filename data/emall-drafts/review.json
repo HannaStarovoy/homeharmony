@@ -2,47 +2,73 @@
   "warnings": [
     {
       "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9366858"
+      "externalId": "9366858",
+      "categoryId": 6970,
+      "propertyId": 1713
     },
     {
       "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9366858"
+      "externalId": "9366858",
+      "categoryId": 6970,
+      "propertyId": 1787
+    },
+    {
+      "code": "PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY",
+      "externalId": "9366858",
+      "propertyId": 1788,
+      "fromCategoryIds": [
+        4702
+      ]
     },
     {
       "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9366858"
-    },
-    {
-      "code": "OLD_PRICE_RESET",
-      "externalId": "9366859"
-    },
-    {
-      "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9366859"
+      "externalId": "9366859",
+      "categoryId": 6970,
+      "propertyId": 1713
     },
     {
       "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9366859"
+      "externalId": "9366859",
+      "categoryId": 6970,
+      "propertyId": 1787
+    },
+    {
+      "code": "PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY",
+      "externalId": "9366859",
+      "propertyId": 1788,
+      "fromCategoryIds": [
+        4702
+      ]
+    },
+    {
+      "code": "PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY",
+      "externalId": "9380065",
+      "propertyId": 1697,
+      "fromCategoryIds": [
+        6970,
+        4702
+      ]
     },
     {
       "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9366859"
+      "externalId": "9380065",
+      "categoryId": 6983,
+      "propertyId": 1713
+    },
+    {
+      "code": "PROPERTY_RESOLVED_FROM_SELECTED_CATEGORY",
+      "externalId": "9380066",
+      "propertyId": 1697,
+      "fromCategoryIds": [
+        6970,
+        4702
+      ]
     },
     {
       "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9380065"
-    },
-    {
-      "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9380065"
-    },
-    {
-      "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9380066"
-    },
-    {
-      "code": "PROPERTY_UNRESOLVED",
-      "externalId": "9380066"
+      "externalId": "9380066",
+      "categoryId": 6983,
+      "propertyId": 1713
     },
     {
       "externalId": "9366858",

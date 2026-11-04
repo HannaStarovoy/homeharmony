@@ -1,0 +1,1392 @@
+{
+  "version": 1,
+  "source": {
+    "provider": "emall",
+    "environment": "production",
+    "account": "homeharmony-emall-main"
+  },
+  "checkedAt": "2026-11-04T08:06:07.706Z",
+  "stockMeaning": "not-confirmed",
+  "shortPriceUnit": "not-separately-documented",
+  "products": [
+    {
+      "externalId": "9366858",
+      "categoryId": 6970,
+      "saved": {
+        "priceCents": 7000,
+        "oldPriceCents": 9000,
+        "stock": 3
+      },
+      "current": {
+        "detail": {
+          "priceCents": 7000,
+          "oldPriceCents": 9000,
+          "stock": 3,
+          "normalizedOldPriceCents": 9000
+        },
+        "short": {
+          "rawPrice": 7000,
+          "stock": 3
+        }
+      },
+      "stockBreakdown": {
+        "detail": {},
+        "short": {}
+      },
+      "differences": [],
+      "properties": [
+        {
+          "propertyId": 149,
+          "sourceKey": "149",
+          "raw": [
+            "25022"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 149,
+            "name": "Тип",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "list",
+            "values": [
+              {
+                "id": 25022,
+                "value": "Шапка"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1697,
+          "sourceKey": "1697",
+          "raw": [
+            7609
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1697,
+            "name": "Назначение",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 7609,
+                "value": "повседневное"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1713,
+          "sourceKey": "1713",
+          "raw": [
+            545
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1787,
+          "sourceKey": "1787",
+          "raw": [
+            "20"
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1788,
+          "sourceKey": "1788",
+          "raw": [
+            "25"
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1844,
+          "sourceKey": "1844",
+          "raw": [
+            39486
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1844,
+            "name": "Размер",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 39486,
+                "value": "One Size"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1877,
+          "sourceKey": "1877",
+          "raw": [
+            97
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1877,
+            "name": "Цвет",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 97,
+                "value": "фиолетовый"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 24221,
+          "sourceKey": "24221",
+          "raw": [
+            105,
+            103
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 24221,
+            "name": "Материал",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 103,
+                "value": "акрил"
+              },
+              {
+                "id": 105,
+                "value": "шерсть"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 34699,
+          "sourceKey": "34699",
+          "raw": [
+            "54",
+            "60"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 34699,
+            "name": "Обхват головы, см",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "range",
+            "values": []
+          }
+        }
+      ],
+      "propertyDictionary": [
+        {
+          "id": 149,
+          "name": "Тип",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "list",
+          "values": [
+            {
+              "id": 25022,
+              "value": "Шапка"
+            }
+          ]
+        },
+        {
+          "id": 1697,
+          "name": "Назначение",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 7609,
+              "value": "повседневное"
+            }
+          ]
+        },
+        {
+          "id": 1844,
+          "name": "Размер",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 39486,
+              "value": "One Size"
+            }
+          ]
+        },
+        {
+          "id": 1877,
+          "name": "Цвет",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 97,
+              "value": "фиолетовый"
+            }
+          ]
+        },
+        {
+          "id": 24221,
+          "name": "Материал",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 103,
+              "value": "акрил"
+            },
+            {
+              "id": 105,
+              "value": "шерсть"
+            }
+          ]
+        },
+        {
+          "id": 26377,
+          "name": "Декор",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 27652,
+          "name": "Название оттенка",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "string",
+          "values": []
+        },
+        {
+          "id": 34699,
+          "name": "Обхват головы, см",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "range",
+          "values": []
+        },
+        {
+          "id": 47614,
+          "name": "Количество упаковок в наборе",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        }
+      ]
+    },
+    {
+      "externalId": "9366859",
+      "categoryId": 6970,
+      "saved": {
+        "priceCents": 7000,
+        "oldPriceCents": 0,
+        "stock": 1
+      },
+      "current": {
+        "detail": {
+          "priceCents": 6000,
+          "oldPriceCents": 7000,
+          "stock": 1,
+          "normalizedOldPriceCents": 7000
+        },
+        "short": {
+          "rawPrice": 6000,
+          "stock": 1
+        }
+      },
+      "stockBreakdown": {
+        "detail": {},
+        "short": {}
+      },
+      "differences": [
+        {
+          "field": "detail.priceCents",
+          "saved": 7000,
+          "current": 6000
+        },
+        {
+          "field": "detail.oldPriceCents",
+          "saved": 0,
+          "current": 7000
+        }
+      ],
+      "properties": [
+        {
+          "propertyId": 149,
+          "sourceKey": "149",
+          "raw": [
+            "25022"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 149,
+            "name": "Тип",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "list",
+            "values": [
+              {
+                "id": 25022,
+                "value": "Шапка"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1697,
+          "sourceKey": "1697",
+          "raw": [
+            7609
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1697,
+            "name": "Назначение",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 7609,
+                "value": "повседневное"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1713,
+          "sourceKey": "1713",
+          "raw": [
+            545
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1787,
+          "sourceKey": "1787",
+          "raw": [
+            "20"
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1788,
+          "sourceKey": "1788",
+          "raw": [
+            "25"
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1844,
+          "sourceKey": "1844",
+          "raw": [
+            39486
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1844,
+            "name": "Размер",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 39486,
+                "value": "One Size"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1877,
+          "sourceKey": "1877",
+          "raw": [
+            89
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1877,
+            "name": "Цвет",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 89,
+                "value": "бежевый"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 24221,
+          "sourceKey": "24221",
+          "raw": [
+            105,
+            103
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 24221,
+            "name": "Материал",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 103,
+                "value": "акрил"
+              },
+              {
+                "id": 105,
+                "value": "шерсть"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 34699,
+          "sourceKey": "34699",
+          "raw": [
+            "54",
+            "60"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 34699,
+            "name": "Обхват головы, см",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "range",
+            "values": []
+          }
+        }
+      ],
+      "propertyDictionary": [
+        {
+          "id": 149,
+          "name": "Тип",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "list",
+          "values": [
+            {
+              "id": 25022,
+              "value": "Шапка"
+            }
+          ]
+        },
+        {
+          "id": 1697,
+          "name": "Назначение",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 7609,
+              "value": "повседневное"
+            }
+          ]
+        },
+        {
+          "id": 1844,
+          "name": "Размер",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 39486,
+              "value": "One Size"
+            }
+          ]
+        },
+        {
+          "id": 1877,
+          "name": "Цвет",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 89,
+              "value": "бежевый"
+            }
+          ]
+        },
+        {
+          "id": 24221,
+          "name": "Материал",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 103,
+              "value": "акрил"
+            },
+            {
+              "id": 105,
+              "value": "шерсть"
+            }
+          ]
+        },
+        {
+          "id": 26377,
+          "name": "Декор",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 27652,
+          "name": "Название оттенка",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "string",
+          "values": []
+        },
+        {
+          "id": 34699,
+          "name": "Обхват головы, см",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "range",
+          "values": []
+        },
+        {
+          "id": 47614,
+          "name": "Количество упаковок в наборе",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        }
+      ]
+    },
+    {
+      "externalId": "9366867",
+      "categoryId": 4702,
+      "saved": {
+        "priceCents": 1620,
+        "oldPriceCents": 2500,
+        "stock": 20
+      },
+      "current": {
+        "detail": {
+          "priceCents": 1620,
+          "oldPriceCents": 2500,
+          "stock": 20,
+          "normalizedOldPriceCents": 2500
+        },
+        "short": {
+          "rawPrice": 1620,
+          "stock": 20
+        }
+      },
+      "stockBreakdown": {
+        "detail": {},
+        "short": {}
+      },
+      "differences": [],
+      "properties": [
+        {
+          "propertyId": 149,
+          "sourceKey": "149",
+          "raw": [
+            "17291"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 149,
+            "name": "Тип",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "list",
+            "values": [
+              {
+                "id": 17291,
+                "value": "Комплект салфеток"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1697,
+          "sourceKey": "1697",
+          "raw": [
+            4230,
+            4538,
+            5834,
+            7785,
+            7805,
+            9766,
+            10712,
+            13269,
+            13766,
+            16301,
+            17149,
+            20556,
+            23718
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1697,
+            "name": "Назначение",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 4230,
+                "value": "универсальное"
+              },
+              {
+                "id": 4538,
+                "value": "для монитора"
+              },
+              {
+                "id": 5834,
+                "value": "для пола"
+              },
+              {
+                "id": 7785,
+                "value": "для стеклокерамических плит"
+              },
+              {
+                "id": 7805,
+                "value": "для кафеля"
+              },
+              {
+                "id": 9766,
+                "value": "для уборки"
+              },
+              {
+                "id": 10712,
+                "value": "для плиты"
+              },
+              {
+                "id": 13269,
+                "value": "для улицы"
+              },
+              {
+                "id": 13766,
+                "value": "для окон"
+              },
+              {
+                "id": 16301,
+                "value": "для гриля"
+              },
+              {
+                "id": 17149,
+                "value": "для пыли"
+              },
+              {
+                "id": 20556,
+                "value": "для зеркал"
+              },
+              {
+                "id": 23718,
+                "value": "для стекол"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1785,
+          "sourceKey": "1785",
+          "raw": [
+            211
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1785,
+            "name": "Форма",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 211,
+                "value": "прямоугольник"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1788,
+          "sourceKey": "1788",
+          "raw": [
+            "30"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1788,
+            "name": "Ширина, см",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "number",
+            "values": []
+          }
+        },
+        {
+          "propertyId": 6335,
+          "sourceKey": "6335",
+          "raw": [
+            "40"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 6335,
+            "name": "Высота, см",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "number",
+            "values": []
+          }
+        },
+        {
+          "propertyId": 9515,
+          "sourceKey": "9515",
+          "raw": [
+            18211
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 9515,
+            "name": "Цвет",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 18211,
+                "value": "серый"
+              }
+            ]
+          }
+        }
+      ],
+      "propertyDictionary": [
+        {
+          "id": 149,
+          "name": "Тип",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "list",
+          "values": [
+            {
+              "id": 17291,
+              "value": "Комплект салфеток"
+            }
+          ]
+        },
+        {
+          "id": 1697,
+          "name": "Назначение",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 4230,
+              "value": "универсальное"
+            },
+            {
+              "id": 4538,
+              "value": "для монитора"
+            },
+            {
+              "id": 5834,
+              "value": "для пола"
+            },
+            {
+              "id": 7785,
+              "value": "для стеклокерамических плит"
+            },
+            {
+              "id": 7805,
+              "value": "для кафеля"
+            },
+            {
+              "id": 9766,
+              "value": "для уборки"
+            },
+            {
+              "id": 10712,
+              "value": "для плиты"
+            },
+            {
+              "id": 13269,
+              "value": "для улицы"
+            },
+            {
+              "id": 13766,
+              "value": "для окон"
+            },
+            {
+              "id": 16301,
+              "value": "для гриля"
+            },
+            {
+              "id": 17149,
+              "value": "для пыли"
+            },
+            {
+              "id": 20556,
+              "value": "для зеркал"
+            },
+            {
+              "id": 23718,
+              "value": "для стекол"
+            }
+          ]
+        },
+        {
+          "id": 1785,
+          "name": "Форма",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 211,
+              "value": "прямоугольник"
+            }
+          ]
+        },
+        {
+          "id": 1788,
+          "name": "Ширина, см",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        },
+        {
+          "id": 1811,
+          "name": "Глубина, см",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        },
+        {
+          "id": 1844,
+          "name": "Размер",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 6335,
+          "name": "Высота, см",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        },
+        {
+          "id": 6393,
+          "name": "Аромат",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 9515,
+          "name": "Цвет",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 18211,
+              "value": "серый"
+            }
+          ]
+        },
+        {
+          "id": 24180,
+          "name": "Тип насадки",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 24221,
+          "name": "Материал",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 24236,
+          "name": "Объем, л",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        },
+        {
+          "id": 24504,
+          "name": "Особенности",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 26228,
+          "name": "В наборе",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 33340,
+          "name": "Материал насадки",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 33342,
+          "name": "Размер насадки, см",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 47614,
+          "name": "Количество упаковок в наборе",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        }
+      ]
+    },
+    {
+      "externalId": "9380065",
+      "categoryId": 6983,
+      "saved": {
+        "priceCents": 4500,
+        "oldPriceCents": 6000,
+        "stock": 1
+      },
+      "current": {
+        "detail": {
+          "priceCents": 4000,
+          "oldPriceCents": 6000,
+          "stock": 1,
+          "normalizedOldPriceCents": 6000
+        },
+        "short": {
+          "rawPrice": 4000,
+          "stock": 1
+        }
+      },
+      "stockBreakdown": {
+        "detail": {},
+        "short": {}
+      },
+      "differences": [
+        {
+          "field": "detail.priceCents",
+          "saved": 4500,
+          "current": 4000
+        }
+      ],
+      "properties": [
+        {
+          "propertyId": 149,
+          "sourceKey": "149",
+          "raw": [
+            "25152"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 149,
+            "name": "Тип",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "list",
+            "values": [
+              {
+                "id": 25152,
+                "value": "Варежки"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1697,
+          "sourceKey": "1697",
+          "raw": [
+            7609
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1713,
+          "sourceKey": "1713",
+          "raw": [
+            545
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1844,
+          "sourceKey": "1844",
+          "raw": [
+            39486
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1844,
+            "name": "Размер",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 39486,
+                "value": "One Size"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1877,
+          "sourceKey": "1877",
+          "raw": [
+            88,
+            89
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1877,
+            "name": "Цвет",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 88,
+                "value": "коричневый"
+              },
+              {
+                "id": 89,
+                "value": "бежевый"
+              }
+            ]
+          }
+        }
+      ],
+      "propertyDictionary": [
+        {
+          "id": 149,
+          "name": "Тип",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "list",
+          "values": [
+            {
+              "id": 25152,
+              "value": "Варежки"
+            }
+          ]
+        },
+        {
+          "id": 1844,
+          "name": "Размер",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 39486,
+              "value": "One Size"
+            }
+          ]
+        },
+        {
+          "id": 1877,
+          "name": "Цвет",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 88,
+              "value": "коричневый"
+            },
+            {
+              "id": 89,
+              "value": "бежевый"
+            }
+          ]
+        },
+        {
+          "id": 24221,
+          "name": "Материал",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 26377,
+          "name": "Декор",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 27652,
+          "name": "Название оттенка",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "string",
+          "values": []
+        },
+        {
+          "id": 47614,
+          "name": "Количество упаковок в наборе",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        }
+      ]
+    },
+    {
+      "externalId": "9380066",
+      "categoryId": 6983,
+      "saved": {
+        "priceCents": 4000,
+        "oldPriceCents": 5000,
+        "stock": 1
+      },
+      "current": {
+        "detail": {
+          "priceCents": 4000,
+          "oldPriceCents": 5000,
+          "stock": 1,
+          "normalizedOldPriceCents": 5000
+        },
+        "short": {
+          "rawPrice": 4000,
+          "stock": 1
+        }
+      },
+      "stockBreakdown": {
+        "detail": {},
+        "short": {}
+      },
+      "differences": [],
+      "properties": [
+        {
+          "propertyId": 149,
+          "sourceKey": "149",
+          "raw": [
+            "25152"
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 149,
+            "name": "Тип",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "list",
+            "values": [
+              {
+                "id": 25152,
+                "value": "Варежки"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1697,
+          "sourceKey": "1697",
+          "raw": [
+            7609
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1713,
+          "sourceKey": "1713",
+          "raw": [
+            545
+          ],
+          "resolved": false,
+          "definition": null
+        },
+        {
+          "propertyId": 1844,
+          "sourceKey": "1844",
+          "raw": [
+            39486
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1844,
+            "name": "Размер",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 39486,
+                "value": "One Size"
+              }
+            ]
+          }
+        },
+        {
+          "propertyId": 1877,
+          "sourceKey": "1877",
+          "raw": [
+            88,
+            86
+          ],
+          "resolved": true,
+          "definition": {
+            "id": 1877,
+            "name": "Цвет",
+            "propertyId": null,
+            "nestedPropertyId": null,
+            "type": "multiselect_list",
+            "values": [
+              {
+                "id": 86,
+                "value": "белый"
+              },
+              {
+                "id": 88,
+                "value": "коричневый"
+              }
+            ]
+          }
+        }
+      ],
+      "propertyDictionary": [
+        {
+          "id": 149,
+          "name": "Тип",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "list",
+          "values": [
+            {
+              "id": 25152,
+              "value": "Варежки"
+            }
+          ]
+        },
+        {
+          "id": 1844,
+          "name": "Размер",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 39486,
+              "value": "One Size"
+            }
+          ]
+        },
+        {
+          "id": 1877,
+          "name": "Цвет",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": [
+            {
+              "id": 86,
+              "value": "белый"
+            },
+            {
+              "id": 88,
+              "value": "коричневый"
+            }
+          ]
+        },
+        {
+          "id": 24221,
+          "name": "Материал",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 26377,
+          "name": "Декор",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "multiselect_list",
+          "values": []
+        },
+        {
+          "id": 27652,
+          "name": "Название оттенка",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "string",
+          "values": []
+        },
+        {
+          "id": 47614,
+          "name": "Количество упаковок в наборе",
+          "propertyId": null,
+          "nestedPropertyId": null,
+          "type": "number",
+          "values": []
+        }
+      ]
+    }
+  ]
+}
