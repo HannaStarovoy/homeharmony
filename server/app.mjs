@@ -40,8 +40,8 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
       res.setHeader('X-Content-Type-Options','nosniff');
       res.setHeader('Referrer-Policy','same-origin');
       res.setHeader('X-Frame-Options','DENY');
-      if (!['GET','HEAD','POST','PUT'].includes(req.method)) throw new Problem(405,'Метод не поддерживается.');
-      if (['POST','PUT'].includes(req.method) && req.headers.origin!==base) throw new Problem(403,'Обновите страницу перед отправкой данных.');
+      if (!['GET','HEAD','POST','PUT','DELETE'].includes(req.method)) throw new Problem(405,'Метод не поддерживается.');
+      if (['POST','PUT','DELETE'].includes(req.method) && req.headers.origin!==base) throw new Problem(403,'Обновите страницу перед отправкой данных.');
       const user=session(store,req);
       if(path==='/api/orders'&&req.method==='POST'){
         const result=store.orders.create(await jsonBody(req),req.headers['idempotency-key'],req.socket.remoteAddress);
@@ -57,7 +57,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
       }
       if (path.startsWith('/api/admin/')) {
         if (!user) return send(res,401,{message:'Войдите в административную панель.',setupRequired:!store.db.prepare('SELECT 1 FROM admins LIMIT 1').get()});
-        if (['POST','PUT'].includes(req.method) && req.headers['x-csrf-token']!==user.csrf) throw new Problem(403,'Сессия изменилась. Обновите страницу и повторите сохранение.');
+        if (['POST','PUT','DELETE'].includes(req.method) && req.headers['x-csrf-token']!==user.csrf) throw new Problem(403,'Сессия изменилась. Обновите страницу и повторите сохранение.');
         if (path==='/api/admin/session' && req.method==='GET') return send(res,200,{email:user.email,csrf:user.csrf});
         if (path==='/api/admin/logout' && req.method==='POST') {
           store.db.prepare('DELETE FROM sessions WHERE token_hash=?').run(user.token_hash);
@@ -70,6 +70,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
         if (path==='/api/admin/catalog' && req.method==='GET') return send(res,200,{categories:store.categories(),products:store.products(),templates});
         if (path==='/api/admin/products' && req.method==='POST') return send(res,201,store.saveProduct(await jsonBody(req)));
         const match=path.match(/^\/api\/admin\/products\/([a-zA-Z0-9-]+)$/);
+        if(match&&req.method==='DELETE')return send(res,200,store.deleteProduct(match[1],(await jsonBody(req))?.version));
         if (match && req.method==='PUT') return send(res,200,store.saveProduct(await jsonBody(req),match[1]));
         if (path==='/api/admin/media' && req.method==='POST') {
           const input=await body(req,8*1024*1024);

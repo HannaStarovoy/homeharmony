@@ -43,10 +43,11 @@ export function applyCatalogPublication(store,planPath){
   const selected=plan.externalIds.map(externalId=>{
    const link=db.prepare('SELECT product_id FROM import_products WHERE provider=? AND environment=? AND account=? AND external_id=?').get(SOURCE.provider,SOURCE.environment,SOURCE.account,externalId);
    const product=link&&products.get(link.product_id);
+   if(!product&&link&&db.prepare('SELECT deleted_at FROM products WHERE id=?').get(link.product_id)?.deleted_at)return null;
    if(!product)invalid('an approved source product is missing.');
    return product;
-  });
-  if(new Set(selected.map(product=>product.id)).size!==5)invalid('source links do not identify five distinct products.');
+  }).filter(Boolean);
+  if(new Set(selected.map(product=>product.id)).size!==selected.length)invalid('source links do not identify five distinct products.');
   let published=0;
   for(const product of selected){
    if(product.status==='published')continue;
@@ -56,6 +57,6 @@ export function applyCatalogPublication(store,planPath){
   db.exec('CREATE TABLE IF NOT EXISTS catalog_publications(id TEXT PRIMARY KEY,digest TEXT NOT NULL,applied_at TEXT NOT NULL)');
   db.prepare('INSERT INTO catalog_publications VALUES(?,?,?)').run(plan.id,digest,new Date().toISOString());
   db.exec('COMMIT');
-  return {applied:true,id:plan.id,published,alreadyPublished:5-published};
+  return {applied:true,id:plan.id,published,alreadyPublished:selected.length-published};
  }catch(error){db.exec('ROLLBACK');throw error}
 }

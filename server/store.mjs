@@ -41,6 +41,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     CREATE TABLE IF NOT EXISTS login_limits(address TEXT PRIMARY KEY, attempts INTEGER NOT NULL, expires INTEGER NOT NULL);
     CREATE TABLE IF NOT EXISTS media(url TEXT PRIMARY KEY, filename TEXT NOT NULL, width INTEGER NOT NULL, height INTEGER NOT NULL, bytes INTEGER NOT NULL);
   `);
+  if(!db.prepare('PRAGMA table_info(products)').all().some(c=>c.name==='deleted_at'))db.exec('ALTER TABLE products ADD COLUMN deleted_at TEXT');
   if (!db.prepare('SELECT 1 FROM migrations WHERE version=1').get()) {
     // A JSON assignment is also readable by a static browser; no execution of the seed file.
     const source = readFileSync(join(root, 'catalog-data.js'), 'utf8');
@@ -62,7 +63,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   const categories = () => db.prepare('SELECT id,name,parent FROM categories ORDER BY rowid').all().map(c => ({...c}));
   function products(publishedOnly = false,{expire=true}={}) {
     if(expire)orders.expire();
-    const rows = db.prepare(`SELECT * FROM products ${publishedOnly ? "WHERE status='published'" : ''} ORDER BY date_rank DESC, id`).all();
+    const rows = db.prepare(`SELECT * FROM products WHERE deleted_at IS NULL ${publishedOnly ? "AND status='published'" : ''} ORDER BY date_rank DESC, id`).all();
     const variants = db.prepare('SELECT * FROM variants ORDER BY position').all();
     const sources=new Map(db.prepare('SELECT sku,external_sku FROM import_variants').all().map(row=>[row.sku,row.external_sku]));
     const byProduct = new Map();
@@ -82,7 +83,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     const value = validateProduct(input, categories(), db);
     if(!withinTransaction)db.exec('BEGIN IMMEDIATE');
     try {
-      const current = id ? db.prepare('SELECT version,type,tag,popularity,date_rank FROM products WHERE id=?').get(id) : null;
+      const current = id ? db.prepare('SELECT version,type,tag,popularity,date_rank FROM products WHERE id=? AND deleted_at IS NULL').get(id) : null;
       if (id && !current) throw new Problem(404, 'Товар не найден.');
       if (current && input.version !== current.version) throw new Problem(409, 'Товар уже изменён в другом окне. Откройте его заново перед сохранением.');
       const productId = id || randomUUID();
@@ -117,12 +118,24 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       return returnProduct?products(false,{expire:false}).find(p=>p.id===productId):db.prepare('SELECT id,version FROM products WHERE id=?').get(productId);
     } catch (error) { if(!withinTransaction)db.exec('ROLLBACK'); throw error; }
   }
-  function isPublicMedia(url) {
-    return !!db.prepare(`SELECT 1 FROM products p,json_each(p.images) i WHERE p.status='published' AND i.value=?
-      UNION ALL SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id,json_each(v.images) i
-      WHERE p.status='published' AND i.value=? LIMIT 1`).get(url,url);
+  function deleteProduct(id,version){
+    if(!Number.isSafeInteger(version)||version<1)throw new Problem(422,'Обновите список товаров перед удалением.');
+    orders.expire();db.exec('BEGIN IMMEDIATE');
+    try{
+      const product=db.prepare('SELECT version FROM products WHERE id=? AND deleted_at IS NULL').get(id);
+      if(!product)throw new Problem(404,'Товар не найден.');
+      if(product.version!==version)throw new Problem(409,'Товар уже изменён. Обновите страницу перед удалением.');
+      for(const v of db.prepare('SELECT sku FROM variants WHERE product_id=?').all(id))if(orders.reserved(v.sku)>0)throw new Problem(409,'Нельзя удалить товар с активным резервом в заказе. Сначала обработайте или отмените заказ.');
+      db.prepare("UPDATE products SET status='draft',deleted_at=?,updated_at=?,version=version+1 WHERE id=?").run(new Date().toISOString(),new Date().toISOString(),id);
+      db.exec('COMMIT');return {ok:true};
+    }catch(error){db.exec('ROLLBACK');throw error}
   }
-  const store={db,dataDir,uploadDir,categories,products,saveProduct,isPublicMedia,orders,close:()=>db.close()};
+  function isPublicMedia(url) {
+    return !!db.prepare(`SELECT 1 FROM products p,json_each(p.images) i WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=?
+      UNION ALL SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id,json_each(v.images) i
+      WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=? LIMIT 1`).get(url,url);
+  }
+  const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,isPublicMedia,orders,close:()=>db.close()};
   store.imports=createImportStore(store,validateProduct);
   if(draftBundleDir)loadDraftBundle(store,draftBundleDir);
   if(massBundleDir)loadDraftBundle(store,massBundleDir,{slot:'mass'});

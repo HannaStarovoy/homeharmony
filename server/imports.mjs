@@ -37,6 +37,7 @@ export function createImportStore(store,validateProduct){
    if(ids.has(externalId))throw new Problem(422,'В одной партии повторяется ID товара источника.');ids.add(externalId);
    const link=db.prepare('SELECT product_id FROM import_products WHERE provider=? AND environment=? AND account=? AND external_id=?').get(...scope(source),externalId);
    const current=link?locals.get(link.product_id):null;
+   if(link&&db.prepare('SELECT deleted_at FROM products WHERE id=?').get(link.product_id)?.deleted_at)continue;
    if(link&&!current)throw new Problem(409,'Связанный товар не найден. Восстановите связь импорта.');
    if(record.attrs!==undefined&&(!record.attrs||typeof record.attrs!=='object'||Array.isArray(record.attrs)))throw new Problem(422,'Характеристики должны быть словарём значений.');
    if(!Array.isArray(record.variants)||!record.variants.length)throw new Problem(422,`Нет вариантов у товара ${externalId}.`);
