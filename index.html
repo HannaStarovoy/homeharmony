@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#313a30" />
+<meta name="theme-color" content="#000000" />
 <title>Магазин доступных цен — интерактивный прототип</title>
 <link rel="stylesheet" href="storefront.css">
 </head>
@@ -43,7 +43,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n)+' BYN';
 const find=id=>products.find(p=>p.id===id);
 const getVariant=(p,idx)=>p.variants[Math.min(Math.max(idx,0),p.variants.length-1)];
-const state={page:'home',cat:'all',collection:'',query:'',sort:'popular',onlyStock:false,onlySale:false,minPrice:null,maxPrice:null,filterColor:'',attributes:{},catalogPage:1,pageSize:12,productId:'hat-line',variantIndex:0,selectedOptions:{},qty:1,gallery:0,filtersOpen:false,menuOpen:false,mobileSearch:false,cart:[],delivery:'courier',payment:'manual',fields:{name:'',phone:'',email:'',city:'',address:'',note:''},agree:false,error:'',orderId:'',receipt:validReceipt(lastOrder?.receipt)?lastOrder.receipt:null,orderAttempt:readSession('store-order-attempt'),submitting:false,toast:''};
+const state={page:'home',cat:'all',collection:'',query:'',sort:'popular',onlyStock:false,onlySale:false,minPrice:null,maxPrice:null,filterColor:'',attributes:{},catalogPage:1,pageSize:4,productId:'hat-line',variantIndex:0,selectedOptions:{},qty:1,gallery:0,filtersOpen:false,menuOpen:false,mobileSearch:false,cart:[],delivery:'courier',payment:'manual',fields:{name:'',phone:'',email:'',city:'',address:'',note:''},agree:false,error:'',orderId:'',receipt:validReceipt(lastOrder?.receipt)?lastOrder.receipt:null,orderAttempt:readSession('store-order-attempt'),submitting:false,toast:''};
 try{
  const saved=JSON.parse(localStorage.getItem('store-demo-cart')||'[]');
  if(Array.isArray(saved))for(const item of saved){
@@ -158,7 +158,7 @@ function renderCatalog(){
  const {found,pages,start}=catalogWindow();
  const children=categories.filter(c=>c.parent===state.cat);
  const path=categoryPath(state.cat);
- return `<main class="container"> <nav class="breadcrumb" aria-label="Хлебные крошки"><button data-go="home">Главная</button>${path.map(c=>`<span>/</span><button data-category="${c.id}" ${c.id===state.cat?'aria-current="page"':''}>${esc(c.name)}</button>`).join('')}</nav><h1 class="page-heading serif">${esc(title)}</h1><p class="page-intro">${state.query?'По запросу «'+esc(state.query)+'»':'Выбирайте товары по цене и подходящим характеристикам'}</p><div class="categories-bar">${children.map(c=>`<button class="category-chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')}${state.cat!=='all'?`<button class="category-chip" data-category="${category(state.cat).parent}">← ${esc(category(category(state.cat).parent).name)}</button>`:''}</div><div class="catalog-wrap"><aside id="catalog-filters" class="sidebar ${state.filtersOpen?'open':''}"><button class="filter-toggle filters-close" data-action="filters">Показать товары (${found.length}) ${I('check',14)}</button>${renderFilters()}</aside><div class="catalog-results"><div class="catalog-toolbar"><button class="filter-toggle" data-action="filters" aria-expanded="${state.filtersOpen}" aria-controls="catalog-filters">${I('filter',16)} Категории и фильтры</button><span class="muted" role="status">Найдено: ${found.length}${found.length?` · ${start+1}–${Math.min(start+state.pageSize,found.length)}`:''}</span><label class="small">Показывать <select class="sort-select" data-page-size aria-label="Товаров на странице">${[12,24,48].map(n=>`<option ${n===state.pageSize?'selected':''}>${n}</option>`).join('')}</select></label><select class="sort-select" data-sort aria-label="Сортировка">${[['popular','Популярные'],['new','Сначала новые'],['price-asc','Сначала дешевле'],['price-desc','Сначала дороже']].map(([value,label])=>`<option value="${value}" ${state.sort===value?'selected':''}>${label}</option>`).join('')}</select></div>${selectedFilters()}<div class="product-grid">${found.length?found.slice(start,start+state.pageSize).map(card).join(''):`<div class="empty"><h3 class="serif">${scopedProducts().length?'Товары не найдены':'В категории пока нет товаров'}</h3><p>${!scopedProducts().length?'Ассортимент этого раздела ещё не добавлен. Посмотрите другие категории.':state.minPrice!==null&&state.maxPrice!==null&&state.minPrice>state.maxPrice?'Цена «от» больше цены «до». Измените диапазон.':'Попробуйте изменить фильтры или поисковый запрос.'}</p>${scopedProducts().length?'<button class="btn btn-outline" data-action="resetFilters">Очистить фильтры</button>':'<button class="btn btn-outline" data-category="all">Весь каталог</button>'}</div>`}</div>${renderPagination(pages)}</div></div></main>`;
+ return `<main class="container"> <nav class="breadcrumb" aria-label="Хлебные крошки"><button data-go="home">Главная</button>${path.map(c=>`<span>/</span><button data-category="${c.id}" ${c.id===state.cat?'aria-current="page"':''}>${esc(c.name)}</button>`).join('')}</nav><h1 class="page-heading serif">${esc(title)}</h1><p class="page-intro">${state.query?'По запросу «'+esc(state.query)+'»':'Выбирайте товары по цене и подходящим характеристикам'}</p><div class="categories-bar">${children.map(c=>`<button class="category-chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')}${state.cat!=='all'?`<button class="category-chip" data-category="${category(state.cat).parent}">← ${esc(category(category(state.cat).parent).name)}</button>`:''}</div><div class="catalog-wrap"><aside id="catalog-filters" class="sidebar ${state.filtersOpen?'open':''}"><button class="filter-toggle filters-close" data-action="filters">Показать товары (${found.length}) ${I('check',14)}</button>${renderFilters()}</aside><div class="catalog-results"><div class="catalog-toolbar"><button class="filter-toggle" data-action="filters" aria-expanded="${state.filtersOpen}" aria-controls="catalog-filters">${I('filter',16)} Категории и фильтры</button><span class="muted" role="status">Найдено: ${found.length}${found.length?` · ${start+1}–${Math.min(start+state.pageSize,found.length)}`:''}</span><label class="small">Показывать <select class="sort-select" data-page-size aria-label="Товаров на странице">${[4].map(n=>`<option ${n===state.pageSize?'selected':''}>${n}</option>`).join('')}</select></label><select class="sort-select" data-sort aria-label="Сортировка">${[['popular','Популярные'],['new','Сначала новые'],['price-asc','Сначала дешевле'],['price-desc','Сначала дороже']].map(([value,label])=>`<option value="${value}" ${state.sort===value?'selected':''}>${label}</option>`).join('')}</select></div>${selectedFilters()}<div class="product-grid">${found.length?found.slice(start,start+state.pageSize).map(card).join(''):`<div class="empty"><h3 class="serif">${scopedProducts().length?'Товары не найдены':'В категории пока нет товаров'}</h3><p>${!scopedProducts().length?'Ассортимент этого раздела ещё не добавлен. Посмотрите другие категории.':state.minPrice!==null&&state.maxPrice!==null&&state.minPrice>state.maxPrice?'Цена «от» больше цены «до». Измените диапазон.':'Попробуйте изменить фильтры или поисковый запрос.'}</p>${scopedProducts().length?'<button class="btn btn-outline" data-action="resetFilters">Очистить фильтры</button>':'<button class="btn btn-outline" data-category="all">Весь каталог</button>'}</div>`}</div>${renderPagination(pages)}</div></div></main>`;
 }
 function renderProduct(){
  const p=find(state.productId)||products[0],v=selectedVariant(p),index=p.variants.indexOf(v);
@@ -240,14 +240,14 @@ function writeLocation(replace=false){
  if(state.filterColor)q.set('color',state.filterColor);
  for(const key of Object.keys(state.attributes).sort())for(const value of [...state.attributes[key]].sort())q.append('attr.'+key,value);
  if(state.catalogPage>1)q.set('page',state.catalogPage);
- if(state.pageSize!==12)q.set('size',state.pageSize);
+ if(state.pageSize!==4)q.set('size',state.pageSize);
  if(state.page==='product'){q.set('product',state.productId);const v=selectedVariant(find(state.productId));if(v)q.set('sku',v.sku)}
  if(state.page==='info')q.set('info',state.info||'delivery');
  if(state.page==='home'&&q.size)q.set('view','home');
  if(url.href!==location.href)history[replace?'replaceState':'pushState'](null,'',url);
 }
 function readLocation(){
- resetFilters();state.cat='all';state.pageSize=12;state.filtersOpen=false;state.menuOpen=false;state.mobileSearch=false;
+ resetFilters();state.cat='all';state.pageSize=4;state.filtersOpen=false;state.menuOpen=false;state.mobileSearch=false;
  const q=new URL(location.href).searchParams;
  state.page=['home','catalog','product','cart','checkout','confirmed','info'].includes(q.get('view'))?q.get('view'):(q.size?'catalog':'home');
  if(state.page==='confirmed'&&!state.receipt)state.page='cart';
@@ -259,7 +259,7 @@ function readLocation(){
  if(availableColors().some(c=>c.name===q.get('color')))state.filterColor=q.get('color');
  if(state.cat!=='all')for(const {key,values} of attributeOptions()){const selected=[...new Set(q.getAll('attr.'+key))].filter(v=>values.includes(v));if(selected.length)state.attributes[key]=selected}
  const page=Number(q.get('page'));if(Number.isSafeInteger(page)&&page>0)state.catalogPage=page;
- const size=Number(q.get('size'));if([12,24,48].includes(size))state.pageSize=size;
+ const size=Number(q.get('size'));if([4].includes(size))state.pageSize=size;
  if(state.page==='product'){const p=find(q.get('product'));if(p){state.productId=p.id;const idx=p.variants.findIndex(v=>v.sku===q.get('sku'));chooseVariant(p,idx>=0?idx:Math.max(0,p.variants.findIndex(v=>v.stock>0)))}else state.page='catalog'}
  if(state.page==='info')state.info=['delivery','returns','contacts'].includes(q.get('info'))?q.get('info'):'delivery';
  catalogWindow();

@@ -3,12 +3,12 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<meta name="theme-color" content="#313a30" />
+<meta name="theme-color" content="#000000" />
 <title>Магазин доступных цен — интерактивный прототип</title>
 <style>
 /* Storefront design: warm editorial surfaces, quiet accents, generous typography. */
 :root {
-  --bg: #f7f5ef;
+  --bg: #ffffff;
   --paper: #fff;
   --text: #292d28;
   --muted: #696d63;
@@ -20,8 +20,8 @@
   --on-accent: #fffdf7;
   --accent-line: #c9c5b6;
   --focus: #88734b;
-  --soft: #efeee8;
-  --warm: #eae6d9;
+  --soft: #f4f5f6;
+  --warm: #eceef0;
   --danger: #984a52;
   --radius: 12px;
   --shadow: 0 16px 40px #2d342612;
@@ -93,7 +93,7 @@ button svg {
 }
 /* Header */
 .announcement {
-  background: #e9e4d7;
+  background: #000000;
   font-size: 13px;
   color: #5f6658;
 }
@@ -196,7 +196,7 @@ button svg {
   align-items: center;
   border: 1px solid #dddfd4;
   border-radius: 8px;
-  background: #f3f2ec;
+  background: #f3f4f5;
   padding: 0 18px;
   gap: 8px;
   min-width: 0;
@@ -442,7 +442,7 @@ button svg {
   min-height: 510px;
   border-radius: 14px;
   overflow: hidden;
-  background: #ece8dc;
+  background: #f2f3f4;
   border: 1px solid #dcd7c7;
   padding: 0;
   box-shadow: none;
@@ -534,7 +534,7 @@ button svg {
   font-size: 11px;
   color: #4e5547;
   z-index: 3;
-  background: #f7f5efe6;
+  background: #ffffffe6;
   padding: 4px 8px;
   border-radius: 3px;
 }
@@ -545,7 +545,7 @@ button svg {
   padding: 30px 24px;
   margin-bottom: 50px;
   gap: 28px;
-  background: #fbfaf6;
+  background: #f7f8f9;
   border: 1px solid var(--line);
   border-radius: 0 0 12px 12px;
   border-top: 0;
@@ -694,7 +694,7 @@ button svg {
   font-weight: 600;
 }
 .deal-more {
-  background: #e9e4d7;
+  background: #000000;
   border: 1px solid #d5ceba;
   border-radius: 12px;
   padding: 32px;
@@ -786,7 +786,7 @@ button svg {
   padding: 30px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fbfaf6;
+  background: #f7f8f9;
 }
 .value-feature {
   display: flex;
@@ -1111,7 +1111,7 @@ button svg {
   color: #5f6658;
 }
 .category-node:hover,.category-node.active {
-  background: #eae6d9;
+  background: #eceef0;
   color: var(--accent-ink);
 }
 .category-node.active {
@@ -1247,7 +1247,7 @@ button svg {
   align-items: center;
   gap: 7px;
   border: 1px solid #c9c5b6;
-  background: #eae6d9;
+  background: #eceef0;
   color: #566047;
   border-radius: 7px;
   padding: 11px 13px;
@@ -1395,7 +1395,7 @@ button svg {
 }
 .variant-pill.active {
   border-color: var(--accent-ink);
-  background: #eae6d9;
+  background: #eceef0;
   color: #566047;
   box-shadow: 0 0 0 1px #313a3026;
 }
@@ -1804,7 +1804,7 @@ button svg {
 }
 /* Footer */
 .footer {
-  background: #eae7dd;
+  background: #000000;
   border-top: 1px solid #dddfd6;
   padding: 58px 0 30px;
   color: #5e6656;
@@ -2109,7 +2109,7 @@ button svg {
   }
   .deal-more {
     padding: 25px;
-    background: #e9e4d7;
+    background: #000000;
     border-color: #d6cdb8;
     border-radius: 12px;
     color: #414a37;
@@ -2344,7 +2344,7 @@ button svg {
     bottom: 12px;
     font-size: 10px;
     color: #4e5547;
-    background: #f7f5efe6;
+    background: #ffffffe6;
     padding: 4px 8px;
     border-radius: 3px;
   }
@@ -2501,7 +2501,7 @@ button svg {
   .deal-more {
     padding: 25px 18px;
     border-radius: 12px;
-    background: #e9e4d7;
+    background: #000000;
     border-color: #d6cdb8;
     color: #414a37;
   }
@@ -2756,7 +2756,7 @@ button svg {
   }
   .footer {
     padding-top: 42px;
-    background: #eae7dd;
+    background: #000000;
     color: #5e6656;
     border-color: #d6d3c4;
   }
@@ -2886,6 +2886,32 @@ button svg {
     margin-bottom: 12px;
   }
 }
+
+/* White canvas, light gray supporting surfaces and black outer bands. */
+.announcement { color: #f5f5f5; }
+.utility-links button { color: #eeeeee; }
+.footer { background: #000; color: #ddd; border-color: #292929; }
+.footer .brand, .footer h4 { color: #fff; }
+.footer p, .footer button:not(.brand), .footer-bottom, .footer .brand-type small { color: #d5d5d5; }
+.footer-bottom { border-color: #333; }
+.footer button:hover { color: #fff; }
+.footer .brand-mark { background: #fff; color: #111; }
+.announcement button:focus-visible, .footer button:focus-visible { outline-color: #fff; }
+.hero-art { background: #eceef0; }
+@media(min-width:1101px){.catalog-results .product-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }}
+@media(min-width:851px) and (max-width:1100px){.catalog-results .product-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }}
+.header { background: #000; color: #fff; border-color: #292929; }
+.store-category-nav { border-color: #292929; }
+.header .brand-type small, .header .cart-label small { color: #d5d5d5; }
+.header .brand-mark { background: #fff; color: #111; }
+.header-icons > button, .header .menu-trigger, .header .nav button { color: #f5f5f5; }
+.header .nav .nav-sale { color: #ffb5bd; }
+.header .catalog-trigger { background: #fff; color: #111; }
+.header .header-search { background: #f3f4f5; color: #202020; }
+.header .header-search input { color: #202020; }
+.header .mobile-menu { background: #000; color: #fff; }
+.header button:focus-visible { outline-color: #fff; }
+.header .header-search button:focus-visible { outline-color: #313a30; }
 
 </style>
 </head>
@@ -3597,7 +3623,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 const money=n=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(n)+' BYN';
 const find=id=>products.find(p=>p.id===id);
 const getVariant=(p,idx)=>p.variants[Math.min(Math.max(idx,0),p.variants.length-1)];
-const state={page:'home',cat:'all',collection:'',query:'',sort:'popular',onlyStock:false,onlySale:false,minPrice:null,maxPrice:null,filterColor:'',attributes:{},catalogPage:1,pageSize:12,productId:'hat-line',variantIndex:0,selectedOptions:{},qty:1,gallery:0,filtersOpen:false,menuOpen:false,mobileSearch:false,cart:[],delivery:'courier',payment:'manual',fields:{name:'',phone:'',email:'',city:'',address:'',note:''},agree:false,error:'',orderId:'',receipt:validReceipt(lastOrder?.receipt)?lastOrder.receipt:null,orderAttempt:readSession('store-order-attempt'),submitting:false,toast:''};
+const state={page:'home',cat:'all',collection:'',query:'',sort:'popular',onlyStock:false,onlySale:false,minPrice:null,maxPrice:null,filterColor:'',attributes:{},catalogPage:1,pageSize:4,productId:'hat-line',variantIndex:0,selectedOptions:{},qty:1,gallery:0,filtersOpen:false,menuOpen:false,mobileSearch:false,cart:[],delivery:'courier',payment:'manual',fields:{name:'',phone:'',email:'',city:'',address:'',note:''},agree:false,error:'',orderId:'',receipt:validReceipt(lastOrder?.receipt)?lastOrder.receipt:null,orderAttempt:readSession('store-order-attempt'),submitting:false,toast:''};
 try{
  const saved=JSON.parse(localStorage.getItem('store-demo-cart')||'[]');
  if(Array.isArray(saved))for(const item of saved){
@@ -3712,7 +3738,7 @@ function renderCatalog(){
  const {found,pages,start}=catalogWindow();
  const children=categories.filter(c=>c.parent===state.cat);
  const path=categoryPath(state.cat);
- return `<main class="container"> <nav class="breadcrumb" aria-label="Хлебные крошки"><button data-go="home">Главная</button>${path.map(c=>`<span>/</span><button data-category="${c.id}" ${c.id===state.cat?'aria-current="page"':''}>${esc(c.name)}</button>`).join('')}</nav><h1 class="page-heading serif">${esc(title)}</h1><p class="page-intro">${state.query?'По запросу «'+esc(state.query)+'»':'Выбирайте товары по цене и подходящим характеристикам'}</p><div class="categories-bar">${children.map(c=>`<button class="category-chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')}${state.cat!=='all'?`<button class="category-chip" data-category="${category(state.cat).parent}">← ${esc(category(category(state.cat).parent).name)}</button>`:''}</div><div class="catalog-wrap"><aside id="catalog-filters" class="sidebar ${state.filtersOpen?'open':''}"><button class="filter-toggle filters-close" data-action="filters">Показать товары (${found.length}) ${I('check',14)}</button>${renderFilters()}</aside><div class="catalog-results"><div class="catalog-toolbar"><button class="filter-toggle" data-action="filters" aria-expanded="${state.filtersOpen}" aria-controls="catalog-filters">${I('filter',16)} Категории и фильтры</button><span class="muted" role="status">Найдено: ${found.length}${found.length?` · ${start+1}–${Math.min(start+state.pageSize,found.length)}`:''}</span><label class="small">Показывать <select class="sort-select" data-page-size aria-label="Товаров на странице">${[12,24,48].map(n=>`<option ${n===state.pageSize?'selected':''}>${n}</option>`).join('')}</select></label><select class="sort-select" data-sort aria-label="Сортировка">${[['popular','Популярные'],['new','Сначала новые'],['price-asc','Сначала дешевле'],['price-desc','Сначала дороже']].map(([value,label])=>`<option value="${value}" ${state.sort===value?'selected':''}>${label}</option>`).join('')}</select></div>${selectedFilters()}<div class="product-grid">${found.length?found.slice(start,start+state.pageSize).map(card).join(''):`<div class="empty"><h3 class="serif">${scopedProducts().length?'Товары не найдены':'В категории пока нет товаров'}</h3><p>${!scopedProducts().length?'Ассортимент этого раздела ещё не добавлен. Посмотрите другие категории.':state.minPrice!==null&&state.maxPrice!==null&&state.minPrice>state.maxPrice?'Цена «от» больше цены «до». Измените диапазон.':'Попробуйте изменить фильтры или поисковый запрос.'}</p>${scopedProducts().length?'<button class="btn btn-outline" data-action="resetFilters">Очистить фильтры</button>':'<button class="btn btn-outline" data-category="all">Весь каталог</button>'}</div>`}</div>${renderPagination(pages)}</div></div></main>`;
+ return `<main class="container"> <nav class="breadcrumb" aria-label="Хлебные крошки"><button data-go="home">Главная</button>${path.map(c=>`<span>/</span><button data-category="${c.id}" ${c.id===state.cat?'aria-current="page"':''}>${esc(c.name)}</button>`).join('')}</nav><h1 class="page-heading serif">${esc(title)}</h1><p class="page-intro">${state.query?'По запросу «'+esc(state.query)+'»':'Выбирайте товары по цене и подходящим характеристикам'}</p><div class="categories-bar">${children.map(c=>`<button class="category-chip" data-category="${c.id}">${esc(c.name)}</button>`).join('')}${state.cat!=='all'?`<button class="category-chip" data-category="${category(state.cat).parent}">← ${esc(category(category(state.cat).parent).name)}</button>`:''}</div><div class="catalog-wrap"><aside id="catalog-filters" class="sidebar ${state.filtersOpen?'open':''}"><button class="filter-toggle filters-close" data-action="filters">Показать товары (${found.length}) ${I('check',14)}</button>${renderFilters()}</aside><div class="catalog-results"><div class="catalog-toolbar"><button class="filter-toggle" data-action="filters" aria-expanded="${state.filtersOpen}" aria-controls="catalog-filters">${I('filter',16)} Категории и фильтры</button><span class="muted" role="status">Найдено: ${found.length}${found.length?` · ${start+1}–${Math.min(start+state.pageSize,found.length)}`:''}</span><label class="small">Показывать <select class="sort-select" data-page-size aria-label="Товаров на странице">${[4].map(n=>`<option ${n===state.pageSize?'selected':''}>${n}</option>`).join('')}</select></label><select class="sort-select" data-sort aria-label="Сортировка">${[['popular','Популярные'],['new','Сначала новые'],['price-asc','Сначала дешевле'],['price-desc','Сначала дороже']].map(([value,label])=>`<option value="${value}" ${state.sort===value?'selected':''}>${label}</option>`).join('')}</select></div>${selectedFilters()}<div class="product-grid">${found.length?found.slice(start,start+state.pageSize).map(card).join(''):`<div class="empty"><h3 class="serif">${scopedProducts().length?'Товары не найдены':'В категории пока нет товаров'}</h3><p>${!scopedProducts().length?'Ассортимент этого раздела ещё не добавлен. Посмотрите другие категории.':state.minPrice!==null&&state.maxPrice!==null&&state.minPrice>state.maxPrice?'Цена «от» больше цены «до». Измените диапазон.':'Попробуйте изменить фильтры или поисковый запрос.'}</p>${scopedProducts().length?'<button class="btn btn-outline" data-action="resetFilters">Очистить фильтры</button>':'<button class="btn btn-outline" data-category="all">Весь каталог</button>'}</div>`}</div>${renderPagination(pages)}</div></div></main>`;
 }
 function renderProduct(){
  const p=find(state.productId)||products[0],v=selectedVariant(p),index=p.variants.indexOf(v);
@@ -3794,14 +3820,14 @@ function writeLocation(replace=false){
  if(state.filterColor)q.set('color',state.filterColor);
  for(const key of Object.keys(state.attributes).sort())for(const value of [...state.attributes[key]].sort())q.append('attr.'+key,value);
  if(state.catalogPage>1)q.set('page',state.catalogPage);
- if(state.pageSize!==12)q.set('size',state.pageSize);
+ if(state.pageSize!==4)q.set('size',state.pageSize);
  if(state.page==='product'){q.set('product',state.productId);const v=selectedVariant(find(state.productId));if(v)q.set('sku',v.sku)}
  if(state.page==='info')q.set('info',state.info||'delivery');
  if(state.page==='home'&&q.size)q.set('view','home');
  if(url.href!==location.href)history[replace?'replaceState':'pushState'](null,'',url);
 }
 function readLocation(){
- resetFilters();state.cat='all';state.pageSize=12;state.filtersOpen=false;state.menuOpen=false;state.mobileSearch=false;
+ resetFilters();state.cat='all';state.pageSize=4;state.filtersOpen=false;state.menuOpen=false;state.mobileSearch=false;
  const q=new URL(location.href).searchParams;
  state.page=['home','catalog','product','cart','checkout','confirmed','info'].includes(q.get('view'))?q.get('view'):(q.size?'catalog':'home');
  if(state.page==='confirmed'&&!state.receipt)state.page='cart';
@@ -3813,7 +3839,7 @@ function readLocation(){
  if(availableColors().some(c=>c.name===q.get('color')))state.filterColor=q.get('color');
  if(state.cat!=='all')for(const {key,values} of attributeOptions()){const selected=[...new Set(q.getAll('attr.'+key))].filter(v=>values.includes(v));if(selected.length)state.attributes[key]=selected}
  const page=Number(q.get('page'));if(Number.isSafeInteger(page)&&page>0)state.catalogPage=page;
- const size=Number(q.get('size'));if([12,24,48].includes(size))state.pageSize=size;
+ const size=Number(q.get('size'));if([4].includes(size))state.pageSize=size;
  if(state.page==='product'){const p=find(q.get('product'));if(p){state.productId=p.id;const idx=p.variants.findIndex(v=>v.sku===q.get('sku'));chooseVariant(p,idx>=0?idx:Math.max(0,p.variants.findIndex(v=>v.stock>0)))}else state.page='catalog'}
  if(state.page==='info')state.info=['delivery','returns','contacts'].includes(q.get('info'))?q.get('info'):'delivery';
  catalogWindow();

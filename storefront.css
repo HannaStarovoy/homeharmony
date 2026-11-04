@@ -1,6 +1,6 @@
 /* Storefront design: warm editorial surfaces, quiet accents, generous typography. */
 :root {
-  --bg: #f7f5ef;
+  --bg: #ffffff;
   --paper: #fff;
   --text: #292d28;
   --muted: #696d63;
@@ -12,8 +12,8 @@
   --on-accent: #fffdf7;
   --accent-line: #c9c5b6;
   --focus: #88734b;
-  --soft: #efeee8;
-  --warm: #eae6d9;
+  --soft: #f4f5f6;
+  --warm: #eceef0;
   --danger: #984a52;
   --radius: 12px;
   --shadow: 0 16px 40px #2d342612;
@@ -85,7 +85,7 @@ button svg {
 }
 /* Header */
 .announcement {
-  background: #e9e4d7;
+  background: #000000;
   font-size: 13px;
   color: #5f6658;
 }
@@ -188,7 +188,7 @@ button svg {
   align-items: center;
   border: 1px solid #dddfd4;
   border-radius: 8px;
-  background: #f3f2ec;
+  background: #f3f4f5;
   padding: 0 18px;
   gap: 8px;
   min-width: 0;
@@ -434,7 +434,7 @@ button svg {
   min-height: 510px;
   border-radius: 14px;
   overflow: hidden;
-  background: #ece8dc;
+  background: #f2f3f4;
   border: 1px solid #dcd7c7;
   padding: 0;
   box-shadow: none;
@@ -526,7 +526,7 @@ button svg {
   font-size: 11px;
   color: #4e5547;
   z-index: 3;
-  background: #f7f5efe6;
+  background: #ffffffe6;
   padding: 4px 8px;
   border-radius: 3px;
 }
@@ -537,7 +537,7 @@ button svg {
   padding: 30px 24px;
   margin-bottom: 50px;
   gap: 28px;
-  background: #fbfaf6;
+  background: #f7f8f9;
   border: 1px solid var(--line);
   border-radius: 0 0 12px 12px;
   border-top: 0;
@@ -686,7 +686,7 @@ button svg {
   font-weight: 600;
 }
 .deal-more {
-  background: #e9e4d7;
+  background: #000000;
   border: 1px solid #d5ceba;
   border-radius: 12px;
   padding: 32px;
@@ -778,7 +778,7 @@ button svg {
   padding: 30px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: #fbfaf6;
+  background: #f7f8f9;
 }
 .value-feature {
   display: flex;
@@ -1103,7 +1103,7 @@ button svg {
   color: #5f6658;
 }
 .category-node:hover,.category-node.active {
-  background: #eae6d9;
+  background: #eceef0;
   color: var(--accent-ink);
 }
 .category-node.active {
@@ -1239,7 +1239,7 @@ button svg {
   align-items: center;
   gap: 7px;
   border: 1px solid #c9c5b6;
-  background: #eae6d9;
+  background: #eceef0;
   color: #566047;
   border-radius: 7px;
   padding: 11px 13px;
@@ -1387,7 +1387,7 @@ button svg {
 }
 .variant-pill.active {
   border-color: var(--accent-ink);
-  background: #eae6d9;
+  background: #eceef0;
   color: #566047;
   box-shadow: 0 0 0 1px #313a3026;
 }
@@ -1796,7 +1796,7 @@ button svg {
 }
 /* Footer */
 .footer {
-  background: #eae7dd;
+  background: #000000;
   border-top: 1px solid #dddfd6;
   padding: 58px 0 30px;
   color: #5e6656;
@@ -2101,7 +2101,7 @@ button svg {
   }
   .deal-more {
     padding: 25px;
-    background: #e9e4d7;
+    background: #000000;
     border-color: #d6cdb8;
     border-radius: 12px;
     color: #414a37;
@@ -2336,7 +2336,7 @@ button svg {
     bottom: 12px;
     font-size: 10px;
     color: #4e5547;
-    background: #f7f5efe6;
+    background: #ffffffe6;
     padding: 4px 8px;
     border-radius: 3px;
   }
@@ -2493,7 +2493,7 @@ button svg {
   .deal-more {
     padding: 25px 18px;
     border-radius: 12px;
-    background: #e9e4d7;
+    background: #000000;
     border-color: #d6cdb8;
     color: #414a37;
   }
@@ -2748,7 +2748,7 @@ button svg {
   }
   .footer {
     padding-top: 42px;
-    background: #eae7dd;
+    background: #000000;
     color: #5e6656;
     border-color: #d6d3c4;
   }
@@ -2878,3 +2878,29 @@ button svg {
     margin-bottom: 12px;
   }
 }
+
+/* White canvas, light gray supporting surfaces and black outer bands. */
+.announcement { color: #f5f5f5; }
+.utility-links button { color: #eeeeee; }
+.footer { background: #000; color: #ddd; border-color: #292929; }
+.footer .brand, .footer h4 { color: #fff; }
+.footer p, .footer button:not(.brand), .footer-bottom, .footer .brand-type small { color: #d5d5d5; }
+.footer-bottom { border-color: #333; }
+.footer button:hover { color: #fff; }
+.footer .brand-mark { background: #fff; color: #111; }
+.announcement button:focus-visible, .footer button:focus-visible { outline-color: #fff; }
+.hero-art { background: #eceef0; }
+@media(min-width:1101px){.catalog-results .product-grid { grid-template-columns: repeat(4,minmax(0,1fr)); }}
+@media(min-width:851px) and (max-width:1100px){.catalog-results .product-grid { grid-template-columns: repeat(2,minmax(0,1fr)); }}
+.header { background: #000; color: #fff; border-color: #292929; }
+.store-category-nav { border-color: #292929; }
+.header .brand-type small, .header .cart-label small { color: #d5d5d5; }
+.header .brand-mark { background: #fff; color: #111; }
+.header-icons > button, .header .menu-trigger, .header .nav button { color: #f5f5f5; }
+.header .nav .nav-sale { color: #ffb5bd; }
+.header .catalog-trigger { background: #fff; color: #111; }
+.header .header-search { background: #f3f4f5; color: #202020; }
+.header .header-search input { color: #202020; }
+.header .mobile-menu { background: #000; color: #fff; }
+.header button:focus-visible { outline-color: #fff; }
+.header .header-search button:focus-visible { outline-color: #313a30; }

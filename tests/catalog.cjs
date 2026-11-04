@@ -11,14 +11,14 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.route('http://shop.test/**',r=>r.fulfill({contentType:new URL(r.request().url()).pathname==='/storefront.css'?'text/css':'text/html',body:new URL(r.request().url()).pathname==='/storefront.css'?css:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:html}));
  await page.goto('http://shop.test/?view=catalog');
  const cards=()=>page.locator('.catalog-results .product-card');
- assert.equal(await cards().count(),12);
+ assert.equal(await cards().count(),4);
  // No hardcoded price ceiling: the original 29 BYN product remains visible.
  await page.getByRole('textbox',{name:'Поиск товаров',exact:true}).fill('Косметика');
  await page.locator('.header-search').evaluate(f=>f.requestSubmit());
  assert.equal(await cards().count(),4);
  await page.reload();assert.equal(await cards().count(),4);
  await page.getByRole('button',{name:'Убрать фильтр: Поиск: Косметика'}).click();
- assert.equal(await cards().count(),12);
+ assert.equal(await cards().count(),4);
  await page.locator('[data-category="hair"]').first().click();
  assert.equal(await cards().count(),4);
  assert.equal(await page.locator('[aria-label^="Цвет:"]').count(),0);
@@ -45,7 +45,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.locator('[data-price="minPrice"]').fill('100');await page.locator('[data-price="minPrice"]').press('Tab');
  assert.equal(await cards().count(),0);assert.match(await page.locator('.empty').innerText(),/больше/);
  await page.goto('http://shop.test/?view=catalog&cat=unknown&min=NaN&max=-2&page=999&size=17&attr.X=oops');
- assert.equal(await cards().count(),2);assert.match(page.url(),/page=2/);assert(!page.url().includes('unknown'));assert(!page.url().includes('NaN'));
+ assert.equal(await cards().count(),2);assert.match(page.url(),/page=4/);assert(!page.url().includes('unknown'));assert(!page.url().includes('NaN'));
  // Direct product link, cart and browser return preserve the catalog URL state.
  await page.goto('http://shop.test/?view=catalog&cat=hats&sort=price-asc');
  await page.locator('.catalog-results [data-product="hat-line"]').first().click();
@@ -69,7 +69,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.setViewportSize({width:1440,height:1000});
  // The configured assortment is reachable on the homepage, in the tree and mobile menu.
  await page.goto('http://shop.test/');
- assert.deepEqual(await page.locator('.value-cat-name').allTextContents(),['Головные уборы и аксессуары','Косметика и бытовая химия','Хозяйственные товары','Продукты питания']);
+ assert.deepEqual(await page.locator('.value-cat-name').allTextContents(),['Головные уборы и аксессуары','Косметика и бытовая химия','Хозяйственные товары','Продукты питания','Красота и здоровье']);
  await page.locator('.value-cat[data-cat="household"]').click();
  assert.deepEqual(await page.locator('.categories-bar [data-category]').allTextContents(),['Губки','Тряпки','← Все товары']);
  for(const [id,title] of [['creams','Кремы'],['cloths','Тряпки']]){
@@ -79,7 +79,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
   assert.equal(await page.locator('[data-price]').count(),0);
   await page.reload();assert.equal(await page.locator('.page-heading').innerText(),title);
  }
- await page.locator('.empty [data-category="all"]').click();assert.equal(await cards().count(),12);
+ await page.locator('.empty [data-category="all"]').click();assert.equal(await cards().count(),4);
  await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
  await page.locator('.mobile-menu [data-cat="cosmetics"]').click();assert.equal(await cards().count(),4);
@@ -92,12 +92,12 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  const large=html.replace('const skuPrice=',fixture+'\nconst skuPrice=');
  await page.unroute('http://shop.test/**');await page.route('http://shop.test/**',r=>r.fulfill({contentType:new URL(r.request().url()).pathname==='/storefront.css'?'text/css':'text/html',body:new URL(r.request().url()).pathname==='/storefront.css'?css:new URL(r.request().url()).pathname==='/catalog-data.js'?seed:large}));
  await page.goto('http://shop.test/?view=catalog&sort=price-asc');
- assert.equal(await cards().count(),12);assert.match(await page.locator('.catalog-toolbar [role="status"]').innerText(),/500/);
+ assert.equal(await cards().count(),4);assert.match(await page.locator('.catalog-toolbar [role="status"]').innerText(),/500/);
  const first=await cards().first().innerText();
  await page.locator('[aria-label="Следующая страница"]').click();assert.match(page.url(),/page=2/);assert.notEqual(await cards().first().innerText(),first);
- await page.reload();assert.equal(await cards().count(),12);assert.equal(await page.locator('.pagination [aria-current="page"]').innerText(),'2');
- await page.locator('[data-catalog-page="42"]').click();assert.equal(await cards().count(),8);
- await page.locator('[data-page-size]').selectOption('48');assert.equal(await cards().count(),48);assert(!new URL(page.url()).searchParams.has('page'));
+ await page.reload();assert.equal(await cards().count(),4);assert.equal(await page.locator('.pagination [aria-current="page"]').innerText(),'2');
+ await page.locator('[data-catalog-page="125"]').click();assert.equal(await cards().count(),4);
+ await page.locator('[data-page-size]').selectOption('4');assert.equal(await cards().count(),4);assert(!new URL(page.url()).searchParams.has('page'));
  await page.locator('[data-sort]').selectOption('price-desc');assert.match(await cards().first().innerText(),/699/);
  await page.locator('[data-price="minPrice"]').fill('650');await page.locator('[data-price="minPrice"]').press('Tab');
  assert.match(await page.locator('.catalog-toolbar [role="status"]').innerText(),/50/);
