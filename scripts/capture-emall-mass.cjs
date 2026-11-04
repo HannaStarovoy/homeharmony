@@ -19,7 +19,8 @@ const fs=require('node:fs/promises'),path=require('node:path'),os=require('node:
   await page.locator('#status-filter').selectOption('draft');await page.waitForFunction(n=>document.querySelectorAll('table.list tbody tr').length===n,drafts.length);
   await page.locator('img').evaluateAll(async images=>{await Promise.all(images.map(i=>i.decode()))});
   if(errors||await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('BROWSER_ERROR');
-  await page.screenshot({path:path.join(root,'preview_emall_mass.png'),fullPage:false});
+  const selectMode=process.argv.includes('--select');if(selectMode)await page.locator('#select-all-products').check();
+  await page.screenshot({path:path.join(root,selectMode?'preview_emall_bulk_actions.png':'preview_emall_mass.png'),fullPage:false});
   const first=drafts[0];await page.locator('[data-edit="'+first.id+'"]').click();await page.locator('#product-form').waitFor();if(await page.locator('[name="name"]').inputValue()!==first.name)throw Error('EDITOR_MISMATCH');
   if(errors)throw Error('BROWSER_ERROR');console.log(JSON.stringify({sourceProducts:source.length,drafts:drafts.length,existingPublished:source.length-drafts.length,browserVerified:true}));
  }finally{await browser?.close();if(app){if(app.server.listening)await new Promise(r=>app.server.close(r));app.store.close()}await fs.rm(directory,{recursive:true,force:true})}

@@ -30,9 +30,9 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
     for await (const part of req) {size+=part.length;if(size>limit)throw new Problem(413,'Файл или запрос слишком большой.');chunks.push(part)}
     return Buffer.concat(chunks);
   }
-  async function jsonBody(req) {
+  async function jsonBody(req,limit) {
     if (req.headers['content-type']?.split(';')[0]!=='application/json') throw new Problem(415,'Ожидаются данные JSON.');
-    try {return JSON.parse((await body(req)).toString('utf8'))} catch(error) {if(error instanceof Problem)throw error;throw new Problem(400,'Некорректный JSON.')}
+    try {return JSON.parse((await body(req,limit)).toString('utf8'))} catch(error) {if(error instanceof Problem)throw error;throw new Problem(400,'Некорректный JSON.')}
   }
   const server=createServer(async(req,res)=>{
     try {
@@ -68,6 +68,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
         if(orderMatch&&req.method==='GET')return send(res,200,store.orders.detail(Number(orderMatch[1])));
         if(orderMatch&&req.method==='PUT')return send(res,200,store.orders.update(Number(orderMatch[1]),await jsonBody(req),user.email));
         if (path==='/api/admin/catalog' && req.method==='GET') return send(res,200,{categories:store.categories(),products:store.products(),templates});
+        if(path==='/api/admin/products/bulk'&&req.method==='POST')return send(res,200,store.bulkProducts(await jsonBody(req,1024*1024)));
         if (path==='/api/admin/products' && req.method==='POST') return send(res,201,store.saveProduct(await jsonBody(req)));
         const match=path.match(/^\/api\/admin\/products\/([a-zA-Z0-9-]+)$/);
         if(match&&req.method==='DELETE')return send(res,200,store.deleteProduct(match[1],(await jsonBody(req))?.version));

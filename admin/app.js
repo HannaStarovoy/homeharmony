@@ -2,14 +2,14 @@ const app=document.querySelector('#admin-app');
 const esc=value=>String(value??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const money=value=>new Intl.NumberFormat('ru-RU',{maximumFractionDigits:2}).format(value)+' BYN';
 const clone=value=>JSON.parse(JSON.stringify(value));
-const state={user:null,csrf:'',catalog:null,editor:null,attrs:[],dimensions:[],search:'',status:'all',category:'all',message:'',error:'',busy:false,uploading:false,setupRequired:false,dirty:false,openVariantPhotos:new Set(),view:location.hash.startsWith('#order')?'orders':'products',ordersData:null,order:null,orderSearch:'',orderStatus:'all',orderPage:1};
+const state={selected:new Map(),visibleIds:[],bulkAction:'publish',user:null,csrf:'',catalog:null,editor:null,attrs:[],dimensions:[],search:'',status:'all',category:'all',message:'',error:'',busy:false,uploading:false,setupRequired:false,dirty:false,openVariantPhotos:new Set(),view:location.hash.startsWith('#order')?'orders':'products',ordersData:null,order:null,orderSearch:'',orderStatus:'all',orderPage:1};
 async function api(path,{method='GET',body,raw=false}={}) {
  const headers={};if(method!=='GET')headers['X-CSRF-Token']=state.csrf;
  if(body!==undefined&&!raw)headers['Content-Type']='application/json';
  const response=await fetch(path,{method,headers,body:body===undefined?undefined:raw?body:JSON.stringify(body),credentials:'same-origin'});
  const data=await response.json();
  if(!response.ok){
-  if(response.status===401&&path!=='/api/admin/login'){state.user=null;state.setupRequired=data.setupRequired;renderLogin()}
+  if(response.status===401&&path!=='/api/admin/login'){state.user=null;state.selected.clear();state.setupRequired=data.setupRequired;renderLogin()}
   throw new Error(data.message||'Не удалось выполнить операцию.');
  }
  return data;
@@ -23,7 +23,7 @@ function templateFor(id){let current=state.catalog.categories.find(c=>c.id===id)
 function renderLogin(){
  app.innerHTML=`<main class="login"><div class="brand"><span class="mark">М</span>Управление магазином</div><section class="panel"><h1>Вход в панель</h1><p class="muted">Товары и заказы вашего магазина.</p><div id="messages">${messageHTML()}</div>${state.setupRequired?'<div class="notice">Сначала создайте учётную запись владельца в терминале проекта командой <code>npm run admin:create</code>. Пароля по умолчанию нет.</div>':''}<form id="login-form"><label class="field">Email<input type="email" name="email" autocomplete="username" required maxlength="200"></label><label class="field">Пароль<input type="password" name="password" autocomplete="current-password" required maxlength="256"></label><button class="btn" type="submit">Войти</button></form></section><a href="/">← Вернуться в магазин</a></main>`;
 }
-async function loadCatalog(){state.catalog=await api('/api/admin/catalog')}
+async function loadCatalog(){state.catalog=await api('/api/admin/catalog');state.selected.clear()}
 async function loadOrders(){state.ordersData=await api('/api/admin/orders?'+new URLSearchParams({q:state.orderSearch,status:state.orderStatus,page:state.orderPage}))}
 async function readAdminRoute(){
  const current=location.hash,id=current.match(/^#order\/([1-9]\d*)$/)?.[1];
@@ -57,10 +57,13 @@ function renderList(){
   const q=state.search.trim().toLocaleLowerCase('ru');
   return (state.status==='all'||p.status===state.status)&&matchCategory&&(!q||[p.name,path(p.cat),...p.variants.map(v=>v.sku)].join(' ').toLocaleLowerCase('ru').includes(q));
  });
- app.innerHTML=header()+`<main class="wrap page"><div class="heading"><div><h1>Товары</h1><span class="muted">${state.catalog.products.length} товаров · ${state.catalog.products.filter(p=>p.status==='published').length} на витрине</span></div><button class="btn" data-action="new">+ Добавить товар</button></div><div id="messages">${messageHTML()}</div><div class="toolbar"><input type="search" id="search" aria-label="Поиск товаров" placeholder="Название или артикул" value="${esc(state.search)}"><select id="status-filter" aria-label="Статус товара"><option value="all">Все статусы</option><option value="draft" ${state.status==='draft'?'selected':''}>Черновики</option><option value="published" ${state.status==='published'?'selected':''}>На витрине</option></select><select id="category-filter" aria-label="Категория товара">${categoryOptions(state.category,true)}</select></div><section class="panel table-scroll">${products.length?`<table class="list"><thead><tr><th>Товар</th><th>Категория</th><th>Цена</th><th>Остаток</th><th>Статус</th><th></th></tr></thead><tbody>${products.map(p=>{
+ state.visibleIds=products.map(p=>p.id);
+ app.innerHTML=header()+`<main class="wrap page"><div class="heading"><div><h1>Товары</h1><span class="muted">${state.catalog.products.length} товаров · ${state.catalog.products.filter(p=>p.status==='published').length} на витрине</span></div><button class="btn" data-action="new">+ Добавить товар</button></div><div id="messages">${messageHTML()}</div><div class="toolbar"><input type="search" id="search" aria-label="Поиск товаров" placeholder="Название или артикул" value="${esc(state.search)}"><select id="status-filter" aria-label="Статус товара"><option value="all">Все статусы</option><option value="draft" ${state.status==='draft'?'selected':''}>Черновики</option><option value="published" ${state.status==='published'?'selected':''}>На витрине</option></select><select id="category-filter" aria-label="Категория товара">${categoryOptions(state.category,true)}</select></div><div class="bulk-toolbar"><span aria-live="polite">Выбрано: ${state.selected.size}</span><select id="bulk-action" aria-label="Действие с выбранными товарами"><option value="publish" ${state.bulkAction==='publish'?'selected':''}>Опубликовать</option><option value="draft" ${state.bulkAction==='draft'?'selected':''}>Вернуть в черновики</option><option value="delete" ${state.bulkAction==='delete'?'selected':''}>Удалить</option></select><button class="btn small" data-action="bulk-apply" ${!state.selected.size||state.busy?'disabled':''}>Применить к выбранным</button><button class="btn plain small" data-action="clear-selection" ${!state.selected.size||state.busy?'disabled':''}>Снять выбор</button><span class="hint">При обновлении списка, поиске или смене фильтров выбор сбрасывается.</span></div><section class="panel table-scroll">${products.length?`<table class="list product-list"><thead><tr><th class="selection-cell"><input type="checkbox" id="select-all-products" aria-label="Выбрать все найденные товары" ${products.length&&products.every(p=>state.selected.has(p.id))?'checked':''} ${state.busy?'disabled':''}></th><th>Товар</th><th>Категория</th><th>Цена</th><th>Остаток</th><th>Статус</th><th></th></tr></thead><tbody>${products.map(p=>{
  const image=p.images?.[0]||p.variants.flatMap(v=>v.images||[])[0];const prices=p.variants.map(v=>v.price);
- return `<tr><td><div class="item-name">${image?`<img class="thumb" src="${esc(image)}" alt="">`:'<span class="thumb placeholder" aria-hidden="true">▧</span>'}<div><strong>${esc(p.name)}</strong><span class="hint">${p.variants.length} SKU</span></div></div></td><td>${esc(path(p.cat))}</td><td>${new Set(prices).size>1?'от ':''}${money(Math.min(...prices))}</td><td>${p.variants.reduce((n,v)=>n+v.stock,0)} шт.<p class="hint">Резерв: ${p.variants.reduce((n,v)=>n+(v.reserved||0),0)}</p></td><td><span class="badge ${p.status}">${p.status==='published'?'На витрине':'Черновик'}</span></td><td><button class="btn secondary small" data-edit="${p.id}">Редактировать</button> <button class="btn danger small" data-delete="${p.id}">Удалить</button></td></tr>`;
+ return `<tr><td class="selection-cell"><input type="checkbox" data-select-product="${p.id}" aria-label="Выбрать ${esc(p.name)}" ${state.selected.has(p.id)?'checked':''} ${state.busy?'disabled':''}></td><td><div class="item-name">${image?`<img class="thumb" src="${esc(image)}" alt="">`:'<span class="thumb placeholder" aria-hidden="true">▧</span>'}<div><strong>${esc(p.name)}</strong><span class="hint">${p.variants.length} SKU</span></div></div></td><td>${esc(path(p.cat))}</td><td>${new Set(prices).size>1?'от ':''}${money(Math.min(...prices))}</td><td>${p.variants.reduce((n,v)=>n+v.stock,0)} шт.<p class="hint">Резерв: ${p.variants.reduce((n,v)=>n+(v.reserved||0),0)}</p></td><td><span class="badge ${p.status}">${p.status==='published'?'На витрине':'Черновик'}</span></td><td><button class="btn secondary small" data-edit="${p.id}">Редактировать</button> <button class="btn danger small" data-delete="${p.id}">Удалить</button></td></tr>`;
  }).join('')}</tbody></table>`:'<div class="empty"><h2>Товары не найдены</h2><p class="muted">Измените условия поиска или добавьте новый товар.</p></div>'}</section></main>`;
+ const allBox=document.querySelector('#select-all-products');if(allBox)allBox.indeterminate=products.some(p=>state.selected.has(p.id))&&!products.every(p=>state.selected.has(p.id));
+ document.querySelectorAll('#search,#status-filter,#category-filter,#bulk-action').forEach(input=>input.disabled=state.busy);
 }
 function emptyVariant(){return {sku:'SKU-'+crypto.randomUUID().slice(0,8).toUpperCase(),price:0,old:0,stock:0,color:'#cad6e8',options:Object.fromEntries(state.dimensions.map(key=>[key,''])),images:[]}}
 function startEditor(product){
@@ -108,13 +111,16 @@ app.addEventListener('input',e=>{
  if(d.attrValue!==undefined)state.attrs[Number(d.attrValue)].value=value;
  if(d.variantField){const numeric=['price','old','stock'].includes(d.variantField);state.editor.variants[Number(d.index)][d.variantField]=numeric?(value===''?0:Number(value)):value}
  if(d.optionKey)state.editor.variants[Number(d.index)].options[d.optionKey]=value;
- if(e.target.id==='search'){const start=e.target.selectionStart;state.search=value;renderList();const input=document.querySelector('#search');input.focus();input.setSelectionRange(start,start)}
+ if(e.target.id==='search'){const start=e.target.selectionStart;state.search=value;state.selected.clear();renderList();const input=document.querySelector('#search');input.focus();input.setSelectionRange(start,start)}
 });
 app.addEventListener('toggle',e=>{if(e.target.dataset.variantPhotos!==undefined){const index=Number(e.target.dataset.variantPhotos);if(e.target.open)state.openVariantPhotos.add(index);else state.openVariantPhotos.delete(index)}},true);
 app.addEventListener('change',async e=>{
  const d=e.target.dataset;
- if(e.target.id==='status-filter'){state.status=e.target.value;renderList()}
- if(e.target.id==='category-filter'){state.category=e.target.value;renderList()}
+ if(d.selectProduct!==undefined){if(state.busy)return;const p=state.catalog.products.find(p=>p.id===d.selectProduct);if(p){if(e.target.checked)state.selected.set(p.id,p.version);else state.selected.delete(p.id)}renderList();document.querySelector('[data-select-product="'+d.selectProduct+'"]')?.focus();return}
+ if(e.target.id==='select-all-products'){if(state.busy)return;for(const id of state.visibleIds){const p=state.catalog.products.find(p=>p.id===id);if(e.target.checked)state.selected.set(id,p.version);else state.selected.delete(id)}renderList();document.querySelector('#select-all-products')?.focus();return}
+ if(e.target.id==='bulk-action'){state.bulkAction=e.target.value;return}
+ if(e.target.id==='status-filter'){state.status=e.target.value;state.selected.clear();renderList()}
+ if(e.target.id==='category-filter'){state.category=e.target.value;state.selected.clear();renderList()}
  if(e.target.id==='order-status-filter'){state.orderStatus=e.target.value;state.orderPage=1;try{await loadOrders();render()}catch(error){setError(error)}}
  if(e.target.id==='editor-category')applyCategory(e.target.value);
  if(d.upload!==undefined){
@@ -127,7 +133,7 @@ app.addEventListener('change',async e=>{
 app.addEventListener('click',async e=>{
  const button=e.target.closest('button');if(!button||button.disabled||state.uploading||state.busy)return;const d=button.dataset;
  try{
-  if(d.action==='logout'){if(state.dirty&&!confirm('Выйти без сохранения изменений?'))return;await api('/api/admin/logout',{method:'POST',body:{}});state.user=null;state.editor=null;state.dirty=false;state.message='';state.error='';renderLogin();return}
+  if(d.action==='logout'){if(state.dirty&&!confirm('Выйти без сохранения изменений?'))return;await api('/api/admin/logout',{method:'POST',body:{}});state.user=null;state.selected.clear();state.editor=null;state.dirty=false;state.message='';state.error='';renderLogin();return}
   if(d.adminView){
    if(state.dirty&&!confirm('Перейти без сохранения товара?'))return;
    state.view=d.adminView;state.editor=null;state.order=null;state.dirty=false;state.error='';state.message='';
@@ -150,7 +156,17 @@ app.addEventListener('click',async e=>{
    const product=state.catalog.products.find(p=>p.id===d.delete);if(!product)return;
    if(!confirm('Удалить товар «'+product.name+'»? Он исчезнет из каталога и админки. Повторный импорт Emall его не восстановит.'))return;
    state.busy=true;button.disabled=true;
-   try{await api('/api/admin/products/'+product.id,{method:'DELETE',body:{version:product.version}});state.editor=null;state.dirty=false;state.error='';state.message='Товар удалён.';await loadCatalog()}finally{state.busy=false;render()}
+   try{await api('/api/admin/products/'+product.id,{method:'DELETE',body:{version:product.version}});state.editor=null;state.dirty=false;state.error='';state.message='Товар удалён.';state.selected.delete(product.id);await loadCatalog()}finally{state.busy=false;render()}
+   return;
+  }
+  if(d.action==='clear-selection'){state.selected.clear();renderList();return}
+  if(d.action==='bulk-apply'){
+   const action=state.bulkAction,products=[...state.selected].map(([id,version])=>({id,version}));if(!products.length)return;
+   const verb={publish:'Опубликовать',draft:'Вернуть в черновики',delete:'Удалить'}[action];
+   if(!confirm(verb+' выбранные товары ('+products.length+')?'+(action==='delete'?' Повторный импорт Emall не восстановит удалённые товары.':'')))return;
+   state.busy=true;renderList();
+   try{const result=await api('/api/admin/products/bulk',{method:'POST',body:{action,products}});state.selected.clear();state.message='Обработано товаров: '+result.selected+'. Изменено: '+result.changed+'.';state.error='';await loadCatalog()}
+   finally{state.busy=false;render()}
    return;
   }
   if(d.action==='new')return startEditor();
