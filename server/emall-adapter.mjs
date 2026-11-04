@@ -58,7 +58,7 @@ function plaintext(value){
   .replace(/\r\n?/g,'\n').replace(/[^\S\n]+/g,' ').replace(/ *\n */g,'\n').replace(/\n{3,}/g,'\n\n').trim();
 }
 const title=value=>typeof value==='string'?plaintext(value).toLocaleLowerCase('ru-RU'):'';
-const ROOTS=new Set(['accessories','cosmetics','household','food']);
+const ROOTS=new Set(['accessories','cosmetics','household','food','beauty-health']);
 const AMBIGUOUS=new Set(['headbands','masks','sets','sponges']);
 function localCatalog(categories){
  if(!Array.isArray(categories)||!categories.length)throw new EmallAdapterError('INVALID_CONFIG');

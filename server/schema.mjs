@@ -1,4 +1,6 @@
 export const templates = {
+  'beauty-health': { attributes: ['Назначение', 'Способ применения', 'Меры предосторожности'], dimensions: ['Объём', 'Упаковка'] },
+  jewelry: { attributes: ['Материал', 'Тип застёжки'], dimensions: ['Цвет'] },
   accessories: { attributes: ['Состав', 'Материал', 'Сезон', 'Уход'], dimensions: ['Цвет', 'Размер'] },
   cosmetics: { attributes: ['Назначение', 'Способ применения', 'Меры предосторожности'], dimensions: ['Объём', 'Аромат'] },
   household: { attributes: ['Материал', 'Назначение', 'Размеры'], dimensions: ['Упаковка', 'Размер'] },

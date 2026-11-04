@@ -7,6 +7,7 @@ import { Problem } from './errors.mjs';
 import { createOrderStore } from './orders.mjs';
 import { createImportStore } from './imports.mjs';
 import { loadDraftBundle } from './draft-bundle.mjs';
+import { updateCategories } from './category-update.mjs';
 import { applyCatalogPublication } from './catalog-publication.mjs';
 export { Problem } from './errors.mjs';
 
@@ -163,6 +164,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   if(draftBundleDir)loadDraftBundle(store,draftBundleDir);
   if(massBundleDir)loadDraftBundle(store,massBundleDir,{slot:'mass'});
   if(publicationPlanPath)applyCatalogPublication(store,publicationPlanPath);
+  updateCategories(db);
   return store;
 }
 

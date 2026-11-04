@@ -95,6 +95,26 @@ window.catalogData = {
       "id": "sweets",
       "name": "Сладости",
       "parent": "food"
+    },
+    {
+      "id": "jewelry",
+      "name": "Бижутерия",
+      "parent": "accessories"
+    },
+    {
+      "id": "beauty-health",
+      "name": "Красота и здоровье",
+      "parent": "all"
+    },
+    {
+      "id": "oral-care",
+      "name": "Уход за полостью рта",
+      "parent": "beauty-health"
+    },
+    {
+      "id": "nail-care",
+      "name": "Товары для маникюра и педикюра",
+      "parent": "beauty-health"
     }
   ],
   "products": [
