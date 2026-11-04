@@ -71,7 +71,7 @@ test('tampered bytes, metadata, foreign URLs, paths and unsafe product payloads 
   value=>value.media[0].bytes++,
   value=>value.media[0].width++,
   value=>value.source.environment='sandbox',
-  value=>value.products.push({...value.products[0],externalId:'sixth'}),
+  value=>value.products=Array.from({length:5001},(_,i)=>({...value.products[0],externalId:String(i)})),
   value=>value.products[0].status='published',
   value=>value.products[0].images=['https://example.test/image.webp'],
   value=>value.products[0].variants[0].stock=null,
@@ -117,4 +117,16 @@ test('failure while recording the bundle version rolls back the core import too'
  await fixture();store.db.exec(`CREATE TABLE draft_bundle_versions(provider TEXT NOT NULL,environment TEXT NOT NULL,account TEXT NOT NULL,digest TEXT NOT NULL,applied_at TEXT NOT NULL,PRIMARY KEY(provider,environment,account));
  CREATE TRIGGER fail_version BEFORE INSERT ON draft_bundle_versions BEGIN SELECT RAISE(ABORT,'simulated marker failure'); END;`);
  assert.throws(()=>loadDraftBundle(store,bundleDir),/simulated marker failure/);assert.equal(count('products'),14);assert.equal(count('import_products'),0);assert.equal(count('import_runs'),0);assert.equal(count('draft_bundle_versions'),0);assert.equal(count('media'),0);assert.deepEqual(await readdir(store.uploadDir),[]);
+});
+
+test('bulk bundle imports 500 drafts and independent slots preserve subsequent manual edits',async()=>{
+ const {manifest}=await fixture({products:500});
+ loadDraftBundle(store,bundleDir,{slot:'mass'});assert.equal(linked().length,500);assert.equal(store.products(true).length,14);
+ const p=imported();store.saveProduct({...p,name:'Правка после импорта'},p.id);
+ loadDraftBundle(store,bundleDir,{slot:'mass'});assert.equal(store.products().find(x=>x.id===p.id).name,'Правка после импорта');assert.equal(linked().length,500);
+ const other=join(dir,'other');await mkdir(other);await mkdir(join(other,'media'));
+ const image=manifest.media[0];await writeFile(join(other,'media',image.file),await readFile(join(bundleDir,'media',image.file)));
+ await writeFile(join(other,'manifest.json'),JSON.stringify({...manifest,products:[{...manifest.products[0],externalId:'separate',variants:[{...manifest.products[0].variants[0],externalId:'separate'}]}]}));
+ loadDraftBundle(store,other);loadDraftBundle(store,bundleDir,{slot:'mass'});loadDraftBundle(store,other);
+ assert.equal(store.products().find(x=>x.id===p.id).name,'Правка после импорта');assert.equal(linked().length,501);
 });

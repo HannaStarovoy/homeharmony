@@ -4,7 +4,7 @@ import {constants,closeSync,fstatSync,lstatSync,openSync,readFileSync,realpathSy
 import {join,resolve} from 'node:path';
 
 const SOURCE={provider:'emall',environment:'production',account:'homeharmony-emall-main'};
-const MAX_IMAGE_BYTES=10*1024*1024,MAX_BUNDLE_BYTES=64*1024*1024;
+const MAX_IMAGE_BYTES=10*1024*1024,MAX_BUNDLE_BYTES=512*1024*1024;
 const hash=bytes=>createHash('sha256').update(bytes).digest('hex');
 const object=value=>value!==null&&typeof value==='object'&&!Array.isArray(value);
 const canonical=value=>Array.isArray(value)?value.map(canonical):object(value)?Object.fromEntries(Object.keys(value).sort().map(key=>[key,canonical(value[key])])):value;
@@ -29,7 +29,7 @@ function images(value=[],declared,used){
 }
 function money(value,label){if(typeof value!=='number'||!Number.isFinite(value)||value<0||value>1_000_000||Math.abs(value*100-Math.round(value*100))>0.000001)invalid(label+' must be a valid price.');return value}
 function validateProducts(products,media,store){
- if(!Array.isArray(products)||products.length<1||products.length>5)invalid('expected one to five products.');
+ if(!Array.isArray(products)||products.length<1||products.length>5000)invalid('expected one to 5000 products.');
  const declared=new Set(media.map(item=>item.url)),used=new Set(),ids=new Set(),categories=new Set(store.categories().filter(c=>c.id!=='all').map(c=>c.id));
  for(const product of products){
   keys(product,['externalId','name','cat','summary','attrs','images','status','variants'],'product');
@@ -106,17 +106,19 @@ function validateExisting(store,item){
  return {row,path,exists:!!stat};
 }
 
-export function loadDraftBundle(store,directoryPath){
+export function loadDraftBundle(store,directoryPath,{slot='default'}={}){
+ if(!['default','mass'].includes(slot))invalid('unsupported bundle slot.');
+ const markerTable=slot==='mass'?'emall_mass_versions':'draft_bundle_versions';
  const bundleDir=resolve(directoryPath),manifestPath=join(bundleDir,'manifest.json');
  if(!optionalStat(manifestPath))return {applied:false,reason:'missing'};
  directory(bundleDir,'bundle');
  let manifest;
- try{manifest=JSON.parse(readRegular(manifestPath,5*1024*1024,'manifest').toString('utf8'))}catch(error){if(error instanceof SyntaxError)invalid('manifest is not valid JSON.');throw error}
+ try{manifest=JSON.parse(readRegular(manifestPath,32*1024*1024,'manifest').toString('utf8'))}catch(error){if(error instanceof SyntaxError)invalid('manifest is not valid JSON.');throw error}
  keys(manifest,['version','source','products','media'],'manifest');
  if(manifest.version!==1)invalid('unsupported version.');
  keys(manifest.source,['provider','environment','account'],'source');
  if(Object.entries(SOURCE).some(([key,value])=>manifest.source[key]!==value))invalid('source must identify the production HomeHarmony catalog.');
- if(!Array.isArray(manifest.media)||manifest.media.length>4040)invalid('media must be a bounded array.');
+ if(!Array.isArray(manifest.media)||manifest.media.length>40000)invalid('media must be a bounded array.');
  if(manifest.media.length)directory(join(bundleDir,'media'),'bundle media');
  const seen=new Set(),loaded=[];let total=0;
  for(const item of manifest.media){
@@ -136,9 +138,9 @@ export function loadDraftBundle(store,directoryPath){
  const digestHash=createHash('sha256').update(JSON.stringify(canonical(manifest)));
  for(const item of [...loaded].sort((a,b)=>a.url.localeCompare(b.url)))digestHash.update('\0'+item.url+'\0').update(item.content);
  const digest=digestHash.digest('hex'),scope=Object.values(SOURCE),db=store.db;
- const exists=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='draft_bundle_versions'").get();
- const unchanged=exists&&db.prepare('SELECT digest FROM draft_bundle_versions WHERE provider=? AND environment=? AND account=?').get(...scope)?.digest===digest;
- if(!unchanged)db.exec(`CREATE TABLE IF NOT EXISTS draft_bundle_versions(
+ const exists=db.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name=?").get(markerTable);
+ const unchanged=exists&&db.prepare(`SELECT digest FROM ${markerTable} WHERE provider=? AND environment=? AND account=?`).get(...scope)?.digest===digest;
+ if(!unchanged)db.exec(`CREATE TABLE IF NOT EXISTS ${markerTable}(
   provider TEXT NOT NULL,environment TEXT NOT NULL,account TEXT NOT NULL,digest TEXT NOT NULL,applied_at TEXT NOT NULL,
   PRIMARY KEY(provider,environment,account));`);
  const addedRows=[],addedFiles=[];
@@ -153,8 +155,8 @@ export function loadDraftBundle(store,directoryPath){
    if(!item.row){db.prepare('INSERT INTO media(url,filename,width,height,bytes) VALUES(?,?,?,?,?)').run(item.url,item.filename,item.width,item.height,item.bytes);addedRows.push(item)}
   }
   if(unchanged)return {applied:false,reason:'unchanged',digest};
-  const result=store.imports.apply(manifest.products,SOURCE,{limit:5,beforeCommit:()=>{
-   db.prepare(`INSERT INTO draft_bundle_versions VALUES(?,?,?,?,?)
+  const result=store.imports.apply(manifest.products,SOURCE,{limit:manifest.products.length,beforeCommit:()=>{
+   db.prepare(`INSERT INTO ${markerTable} VALUES(?,?,?,?,?)
     ON CONFLICT(provider,environment,account) DO UPDATE SET digest=excluded.digest,applied_at=excluded.applied_at`).run(...scope,digest,new Date().toISOString());
   }});
   return {applied:true,digest,...result};
