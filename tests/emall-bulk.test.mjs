@@ -25,5 +25,12 @@ process.stdout.write(JSON.stringify({data,meta:{total,count:data.length,per_page
   assert.equal(r.status,0,r.stderr);assert.deepEqual(JSON.parse(r.stdout),{received:102,prepared:100,skipped:2,photos:1,published:0});
   const manifest=JSON.parse(await readFile(join(output,'manifest.json'),'utf8')),review=JSON.parse(await readFile(join(output,'review.json'),'utf8'));
   assert.equal(manifest.products.length,100);assert.equal(manifest.media.length,1);assert.deepEqual(review.skipped.map(s=>s.code),['CATEGORY_UNMAPPED','NO_VALID_PHOTOS']);assert(!JSON.stringify({manifest,review}).includes('SYNTHETIC_BULK_TOKEN'));
+  const env={...process.env,PATH:dir+delimiter+process.env.PATH,EMALL_API_TOKEN:'SYNTHETIC_BULK_TOKEN'};
+  const incomplete=spawnSync(process.execPath,['scripts/import-emall-all.mjs','--output',join(dir,'incomplete'),'--limit','2'],{cwd:new URL('../',import.meta.url),env,encoding:'utf8',timeout:20000});
+  assert.equal(incomplete.status,1);assert.match(incomplete.stderr,/CATALOG_LIMIT_EXCEEDED/);
+  const curl=join(dir,'curl');await writeFile(curl,(await readFile(curl,'utf8')).replace('category_id:id===1?999:11','category_id:999'),{mode:0o700});
+  const emptyOutput=join(dir,'all-skipped'),empty=spawnSync(process.execPath,['scripts/import-emall-all.mjs','--output',emptyOutput],{cwd:new URL('../',import.meta.url),env,encoding:'utf8',timeout:20000});
+  assert.equal(empty.status,1);assert.match(empty.stderr,/NO_IMPORTABLE_PRODUCTS/);assert.equal(JSON.parse(await readFile(join(emptyOutput,'review.json'),'utf8')).skipped.length,102);
+
  }finally{await rm(dir,{recursive:true,force:true})}
 });
