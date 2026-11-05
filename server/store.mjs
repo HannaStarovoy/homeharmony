@@ -1,3 +1,5 @@
+import {createAdminTools} from './admin-tools.mjs';
+import {createBackups} from './backups.mjs';
 import {initRecovery,snapshot,recordHistory,recoveryTools} from './recovery.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdirSync, chmodSync } from 'node:fs';
@@ -192,6 +194,8 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   }
   const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,bulkProducts,mergeProducts,isPublicMedia,orders,close:()=>db.close()};
   store.recovery=recoveryTools(store);
+  store.tools=createAdminTools(store);
+  store.backups=createBackups(store);
   store.imports=createImportStore(store,validateProduct);
   if(draftBundleDir)loadDraftBundle(store,draftBundleDir);
   if(massBundleDir)loadDraftBundle(store,massBundleDir,{slot:'mass'});

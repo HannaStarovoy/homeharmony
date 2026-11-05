@@ -12,3 +12,6 @@ test-results/
 
 # Downloaded bulk catalog package; local shop data is not source code.
 data/emall-mass/
+
+# Shop backups may contain customer orders.
+*.hhbackup

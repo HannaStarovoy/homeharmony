@@ -26,15 +26,18 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
   }
   async function body(req,limit=256*1024) {
     if (Number(req.headers['content-length'])>limit) throw new Problem(413,'Файл или запрос слишком большой.');
+    if(req.savedBody){if(req.savedBody.length>limit)throw new Problem(413,'Файл или запрос слишком большой.');return req.savedBody}
     const chunks=[];let size=0;
     for await (const part of req) {size+=part.length;if(size>limit)throw new Problem(413,'Файл или запрос слишком большой.');chunks.push(part)}
-    return Buffer.concat(chunks);
+    req.savedBody=Buffer.concat(chunks);return req.savedBody;
   }
   async function jsonBody(req,limit) {
     if (req.headers['content-type']?.split(';')[0]!=='application/json') throw new Problem(415,'Ожидаются данные JSON.');
     try {return JSON.parse((await body(req,limit)).toString('utf8'))} catch(error) {if(error instanceof Problem)throw error;throw new Problem(400,'Некорректный JSON.')}
   }
+  let writeTail=Promise.resolve();
   const server=createServer(async(req,res)=>{
+    let releaseWrite;
     try {
       const base=expectedOrigin(req),url=new URL(req.url,base),path=url.pathname;
       res.setHeader('X-Content-Type-Options','nosniff');
@@ -42,7 +45,15 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
       res.setHeader('X-Frame-Options','DENY');
       if (!['GET','HEAD','POST','PUT','DELETE'].includes(req.method)) throw new Problem(405,'Метод не поддерживается.');
       if (['POST','PUT','DELETE'].includes(req.method) && req.headers.origin!==base) throw new Problem(403,'Обновите страницу перед отправкой данных.');
-      const user=session(store,req);
+      let user=session(store,req);
+      if(['POST','PUT','DELETE'].includes(req.method)){
+        const adminWrite=path.startsWith('/api/admin/')&&path!=='/api/admin/login';
+        if(!adminWrite||user){
+          if(adminWrite&&req.headers['x-csrf-token']!==user.csrf)throw new Problem(403,'Сессия изменилась. Обновите страницу.');
+          const limit=path.startsWith('/api/admin/backups/')?256*1024*1024:path==='/api/admin/media'?8*1024*1024:2*1024*1024;
+          await body(req,limit);const previous=writeTail;writeTail=new Promise(resolve=>releaseWrite=resolve);await previous;user=session(store,req);
+        }
+      }
       if(path==='/api/orders'&&req.method==='POST'){
         const result=store.orders.create(await jsonBody(req),req.headers['idempotency-key'],req.socket.remoteAddress);
         return send(res,result.replayed?200:201,result.receipt);
@@ -67,7 +78,15 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
         const orderMatch=path.match(/^\/api\/admin\/orders\/([1-9]\d{0,12})$/);
         if(orderMatch&&req.method==='GET')return send(res,200,store.orders.detail(Number(orderMatch[1])));
         if(orderMatch&&req.method==='PUT')return send(res,200,store.orders.update(Number(orderMatch[1]),await jsonBody(req),user.email));
-        if (path==='/api/admin/catalog' && req.method==='GET') return send(res,200,{categories:store.categories(),products:store.products(),templates});
+        if (path==='/api/admin/catalog' && req.method==='GET') return send(res,200,{categories:store.categories(),products:store.products(),templates,views:store.tools.listViews()});
+        if(path==='/api/admin/products/rows'&&req.method==='POST')return send(res,200,store.tools.saveRows(await jsonBody(req,2*1024*1024)));
+        if(path==='/api/admin/views'&&req.method==='POST')return send(res,201,store.tools.saveView(await jsonBody(req)));
+        if(path==='/api/admin/views'&&req.method==='DELETE')return send(res,200,store.tools.deleteView((await jsonBody(req))?.id));
+        if(path==='/api/admin/backups/list'&&req.method==='GET')return send(res,200,await store.backups.listSafety());
+        if(path==='/api/admin/backups/download'&&req.method==='GET'){const bytes=await store.backups.exportBackup();res.setHeader('Content-Disposition','attachment; filename=homeharmony-'+new Date().toISOString().slice(0,10)+'.hhbackup');return send(res,200,bytes,'application/gzip')}
+        if(path==='/api/admin/backups/safety'&&req.method==='GET')return send(res,200,await store.backups.downloadSafety(url.searchParams.get('name')),'application/gzip');
+        if(path==='/api/admin/backups/inspect'&&req.method==='POST')return send(res,200,await store.backups.inspect(await body(req,256*1024*1024)));
+        if(path==='/api/admin/backups/restore'&&req.method==='POST')return send(res,200,await store.backups.restore(await body(req,256*1024*1024)));
         if(path==='/api/admin/recovery'&&req.method==='GET')return send(res,200,store.recovery.list());
         if(path==='/api/admin/recovery/restore'&&req.method==='POST')return send(res,200,store.recovery.restore(await jsonBody(req)));
         if(path==='/api/admin/recovery/split'&&req.method==='POST')return send(res,200,store.recovery.split(await jsonBody(req)));
@@ -119,9 +138,9 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
       if (res.headersSent) {res.destroy();return}
       if (!(error instanceof Problem)) console.error('Request failed:',error.code||error.name);
       send(res,error.status||500,{message:error instanceof Problem?error.message:'Не удалось выполнить операцию. Попробуйте ещё раз.',...(error.field?{field:error.field}:{}),...(error instanceof Problem&&error.code?{code:error.code}:{})});
-    }
+    } finally {releaseWrite?.()}
   });
-  server.requestTimeout=30_000;
+  server.requestTimeout=120_000;
   server.headersTimeout=15_000;
   return {server,store};
 }
