@@ -68,6 +68,10 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
         if(orderMatch&&req.method==='GET')return send(res,200,store.orders.detail(Number(orderMatch[1])));
         if(orderMatch&&req.method==='PUT')return send(res,200,store.orders.update(Number(orderMatch[1]),await jsonBody(req),user.email));
         if (path==='/api/admin/catalog' && req.method==='GET') return send(res,200,{categories:store.categories(),products:store.products(),templates});
+        if(path==='/api/admin/recovery'&&req.method==='GET')return send(res,200,store.recovery.list());
+        if(path==='/api/admin/recovery/restore'&&req.method==='POST')return send(res,200,store.recovery.restore(await jsonBody(req)));
+        if(path==='/api/admin/recovery/split'&&req.method==='POST')return send(res,200,store.recovery.split(await jsonBody(req)));
+        if(path==='/api/admin/recovery/undo-price'&&req.method==='POST')return send(res,200,store.recovery.undoPrice(await jsonBody(req)));
         if(path==='/api/admin/products/merge'&&req.method==='POST')return send(res,200,store.mergeProducts(await jsonBody(req,1024*1024)));
         if(path==='/api/admin/products/bulk'&&req.method==='POST')return send(res,200,store.bulkProducts(await jsonBody(req,1024*1024)));
         if (path==='/api/admin/products' && req.method==='POST') return send(res,201,store.saveProduct(await jsonBody(req)));

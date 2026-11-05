@@ -1,3 +1,4 @@
+import {snapshot,recordHistory} from './recovery.mjs';
 import { createHash } from 'node:crypto';
 import { Problem } from './errors.mjs';
 export const deliveries={courier:{name:'Курьерская доставка',priceCents:800},post:{name:'Почтовая доставка',priceCents:600},pickup:{name:'Самовывоз',priceCents:0}};
@@ -112,6 +113,7 @@ export function createOrderStore(db,{reserveHours=24}={}){
    if(current.version!==input.version)throw new Problem(409,'Заказ уже изменён. Обновите карточку перед сменой статуса.');
    if(!transitions[current.status].includes(input.status))throw new Problem(409,'Этот переход статуса недоступен. Отправленные и завершённые заказы нельзя отменить через эту кнопку.');
    if(current.status==='confirmed'&&['shipped','completed'].includes(input.status)){
+    const historyIds=db.prepare('SELECT DISTINCT product_id FROM order_items WHERE order_id=?').all(id).map(row=>row.product_id),historyBefore=snapshot(db,historyIds);
     const held=db.prepare('SELECT sku,qty FROM reservations WHERE order_id=?').all(id);
     const count=db.prepare('SELECT count(*) AS n FROM order_items WHERE order_id=?').get(id).n;
     if(held.length!==count)throw new Problem(409,'Резерв заказа изменился. Проверьте остатки перед отправкой.');
@@ -120,6 +122,7 @@ export function createOrderStore(db,{reserveHours=24}={}){
      if(!result.changes)throw new Problem(409,'Остатка недостаточно для отправки. Проверьте склад.');
     }
     db.prepare('UPDATE products SET version=version+1,updated_at=? WHERE id IN (SELECT product_id FROM order_items WHERE order_id=?)').run(new Date(now).toISOString(),id);
+    recordHistory(db,'order-stock',historyBefore,snapshot(db,historyIds));
     db.prepare('DELETE FROM reservations WHERE order_id=?').run(id);
    }
    if(input.status==='cancelled')db.prepare('DELETE FROM reservations WHERE order_id=?').run(id);

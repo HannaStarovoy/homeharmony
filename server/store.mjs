@@ -1,3 +1,4 @@
+import {initRecovery,snapshot,recordHistory,recoveryTools} from './recovery.mjs';
 import { DatabaseSync } from 'node:sqlite';
 import { readFileSync, mkdirSync, chmodSync } from 'node:fs';
 import { resolve, join } from 'node:path';
@@ -61,6 +62,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
   if(!db.prepare('PRAGMA table_info(products)').all().some(c=>c.name==='merge_protected'))db.exec('ALTER TABLE products ADD COLUMN merge_protected INTEGER NOT NULL DEFAULT 0');
+  initRecovery(db);
   const orders=createOrderStore(db,{reserveHours});
   const categories = () => db.prepare('SELECT id,name,parent FROM categories ORDER BY rowid').all().map(c => ({...c}));
   function products(publishedOnly = false,{expire=true}={}) {
@@ -90,6 +92,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       if (id && !current) throw new Problem(404, 'Товар не найден.');
       if (current && input.version !== current.version) throw new Problem(409, 'Товар уже изменён в другом окне. Откройте его заново перед сохранением.');
       const productId = id || randomUUID();
+      const historyBefore=snapshot(db,[productId]);
       for (const v of value.variants) {
         const owner = db.prepare('SELECT product_id FROM variants WHERE sku=?').get(v.sku);
         if (owner && owner.product_id !== productId) throw new Problem(409, `Артикул ${v.sku} уже используется другим товаром.`, 'variants');
@@ -117,6 +120,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
           .run(productId,value.name,value.cat,value.summary,json(value.attrs),json(value.images),value.status,Date.now(),new Date().toISOString());
       }
       value.variants.forEach((v,i)=>db.prepare('INSERT INTO variants VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(sku) DO UPDATE SET name=excluded.name,options=excluded.options,price_cents=excluded.price_cents,old_cents=excluded.old_cents,stock=excluded.stock,color=excluded.color,images=excluded.images,position=excluded.position').run(v.sku,productId,v.name,json(v.options),v.priceCents,v.oldCents,v.stock,v.color,json(v.images),i));
+      recordHistory(db,'edit',historyBefore,snapshot(db,[productId]));
       if(!withinTransaction)db.exec('COMMIT');
       return returnProduct?products(false,{expire:false}).find(p=>p.id===productId):db.prepare('SELECT id,version FROM products WHERE id=?').get(productId);
     } catch (error) { if(!withinTransaction)db.exec('ROLLBACK'); throw error; }
@@ -126,11 +130,13 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     if(!Number.isSafeInteger(version)||version<1)throw new Problem(422,'Обновите список товаров перед удалением.');
     if(!withinTransaction){orders.expire();db.exec('BEGIN IMMEDIATE')}
     try{
+      const historyBefore=snapshot(db,[id]);
       const product=db.prepare('SELECT version FROM products WHERE id=? AND deleted_at IS NULL').get(id);
       if(!product)throw new Problem(404,'Товар не найден.');
       if(product.version!==version)throw new Problem(409,'Товар уже изменён. Обновите страницу перед удалением.');
       for(const v of db.prepare('SELECT sku FROM variants WHERE product_id=?').all(id))if(orders.reserved(v.sku)>0)throw new Problem(409,'Нельзя удалить товар с активным резервом в заказе. Сначала обработайте или отмените заказ.');
       db.prepare("UPDATE products SET status='draft',deleted_at=?,updated_at=?,version=version+1 WHERE id=?").run(new Date().toISOString(),new Date().toISOString(),id);
+      recordHistory(db,'delete',historyBefore,snapshot(db,[id]));
       if(!withinTransaction)db.exec('COMMIT');return {ok:true};
     }catch(error){if(!withinTransaction)db.exec('ROLLBACK');throw error}
   }
@@ -143,6 +149,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       const chosen=input.products.map(item=>{const p=all.get(item.id);if(!p)throw new Problem(409,'Один из выбранных товаров удалён. Обновите список.');if(p.version!==item.version)throw new Problem(409,'Один из выбранных товаров изменён. Обновите список и выберите товары заново.');return p});
       if(input.action==='category'&&!categories().some(c=>c.id===input.category&&c.id!=='all'))throw new Problem(422,'Выберите категорию.');
       if(input.action==='price'&&(!['amount','percent'].includes(input.mode)||typeof input.amount!=='number'||!Number.isFinite(input.amount)||Math.abs(input.amount)>1000000))throw new Problem(422,'Укажите корректное изменение цены.');
+      const historyBefore=snapshot(db,chosen.map(p=>p.id));
       let changed=0;
       for(const p of chosen){
         if(input.action==='delete'){deleteProduct(p.id,p.version,{withinTransaction:true});changed++}
@@ -153,6 +160,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
         }
         else{const status=input.action==='publish'?'published':'draft';if(p.status!==status){saveProduct({...p,status},p.id,{withinTransaction:true,returnProduct:false});changed++}}
       }
+      if(input.action==='price')recordHistory(db,'bulk-price',historyBefore,snapshot(db,chosen.map(p=>p.id)));
       db.exec('COMMIT');return {ok:true,selected:chosen.length,changed};
     }catch(error){db.exec('ROLLBACK');throw error}
   }
@@ -173,6 +181,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       for(const p of chosen.slice(1))db.prepare('UPDATE variants SET product_id=? WHERE product_id=?').run(primary.id,p.id);
       saveProduct(payload,primary.id,{withinTransaction:true,returnProduct:false});
       const now=new Date().toISOString();for(const p of chosen){db.prepare('UPDATE products SET merge_protected=1 WHERE id=?').run(p.id);if(p.id!==primary.id)db.prepare("UPDATE products SET deleted_at=?,status='draft',version=version+1,updated_at=? WHERE id=?").run(now,now,p.id)}
+      recordHistory(db,'merge',[],snapshot(db,[primary.id]));
       db.exec('COMMIT');return {ok:true,id:primary.id,variants:variants.length};
     }catch(error){db.exec('ROLLBACK');throw error}
   }
@@ -182,6 +191,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=? LIMIT 1`).get(url,url);
   }
   const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,bulkProducts,mergeProducts,isPublicMedia,orders,close:()=>db.close()};
+  store.recovery=recoveryTools(store);
   store.imports=createImportStore(store,validateProduct);
   if(draftBundleDir)loadDraftBundle(store,draftBundleDir);
   if(massBundleDir)loadDraftBundle(store,massBundleDir,{slot:'mass'});
