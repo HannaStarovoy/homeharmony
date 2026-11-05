@@ -30,7 +30,11 @@ const {chromium}=require('playwright'),fs=require('node:fs/promises'),os=require
     if(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth))throw Error('OVERFLOW_'+stage);
     if(width===1440||width===390){
      const suffix=width===1440?'desktop':'mobile';await capture('preview_design_'+name+'_'+suffix+'.png');
-     if(name==='home')await capture('preview_'+suffix+'.png');
+     if(name==='home'){
+      await capture('preview_'+suffix+'.png');
+      for(const [slide,label] of [[1,'accessories'],[2,'care']]){await page.locator('[data-hero-slide="'+slide+'"]').click();await capture('preview_banner_'+label+'_'+suffix+'.png')}
+      await page.locator('[data-hero-slide="0"]').click();
+     }
      if(name==='catalog'&&width===1440)await capture('preview_catalog.png');
      const readings=await page.evaluate(()=>Object.fromEntries(['.product-name','.price','.quick-add button','.header-search input','.page-intro','.detail-info h1'].map(s=>{const el=document.querySelector(s);return [s,el?getComputedStyle(el).fontSize:null]})));measures.push({width,screen:name,fonts:readings});
     }

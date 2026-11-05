@@ -69,7 +69,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.setViewportSize({width:1440,height:1000});
  // The configured assortment is reachable on the homepage, in the tree and mobile menu.
  await page.goto('http://shop.test/');
- assert.deepEqual(await page.locator('.value-cat-name').allTextContents(),['Головные уборы и аксессуары','Косметика и бытовая химия','Хозяйственные товары','Продукты питания','Красота и здоровье']);
+ assert.deepEqual(await page.locator('.value-cat-name').allTextContents(),['Головные уборы и аксессуары','Хозяйственные товары','Продукты питания','Красота и здоровье']);
  await page.locator('.value-cat[data-cat="household"]').click();
  assert.deepEqual(await page.locator('.categories-bar [data-category]').allTextContents(),['Губки','Тряпки','← Все товары']);
  for(const [id,title] of [['creams','Кремы'],['cloths','Тряпки']]){
@@ -82,7 +82,7 @@ const html=fs.readFileSync(require('node:path').join(__dirname,'../index.html'),
  await page.locator('.empty [data-category="all"]').click();assert.equal(await cards().count(),12);
  await page.setViewportSize({width:390,height:844});
  await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
- await page.locator('.mobile-menu [data-cat="cosmetics"]').click();assert.equal(await cards().count(),4);
+ await page.locator('.mobile-menu [data-cat="beauty-health"]').click();assert.equal(await cards().count(),4);
  await page.getByRole('button',{name:'Открыть меню',exact:true}).click();
  await page.locator('.mobile-menu [data-cat="food"]').click();assert.equal(await cards().count(),1);
  assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);

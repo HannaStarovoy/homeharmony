@@ -10,7 +10,7 @@ import { Problem } from './errors.mjs';
 import { createOrderStore } from './orders.mjs';
 import { createImportStore } from './imports.mjs';
 import { loadDraftBundle } from './draft-bundle.mjs';
-import { updateCategories } from './category-update.mjs';
+import { updateCategories,updateBeautyCategories } from './category-update.mjs';
 import { applyCatalogPublication } from './catalog-publication.mjs';
 export { Problem } from './errors.mjs';
 
@@ -50,7 +50,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     // A JSON assignment is also readable by a static browser; no execution of the seed file.
     const source = readFileSync(join(root, 'catalog-data.js'), 'utf8');
     const seed = JSON.parse(source.slice(source.indexOf('window.catalogData = ') + 'window.catalogData = '.length).trim().replace(/;$/, ''));
-    db.exec('BEGIN IMMEDIATE');
+    db.exec('BEGIN IMMEDIATE; PRAGMA defer_foreign_keys=ON;');
     try {
       for (const c of seed.categories) db.prepare('INSERT INTO categories VALUES(?,?,?)').run(c.id, c.name, c.parent);
       for (const p of seed.products) {
@@ -201,6 +201,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   if(massBundleDir)loadDraftBundle(store,massBundleDir,{slot:'mass'});
   if(publicationPlanPath)applyCatalogPublication(store,publicationPlanPath);
   updateCategories(db);
+  updateBeautyCategories(db);
   return store;
 }
 

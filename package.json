@@ -11,7 +11,7 @@
     "dev": "node --env-file-if-exists=.env.local --watch server/main.mjs",
     "admin:create": "node --env-file-if-exists=.env.local scripts/admin-user.mjs",
     "test": "node --test tests/*.test.mjs",
-    "test:ui": "node tests/catalog.cjs && node tests/product.cjs && node tests/admin.cjs && node tests/orders.cjs",
+    "test:ui": "node tests/catalog.cjs && node tests/carousel.cjs && node tests/product.cjs && node tests/admin.cjs && node tests/orders.cjs",
     "emall:import": "node --env-file-if-exists=.env.local scripts/import-emall-all.mjs",
     "emall:apply": "node --env-file-if-exists=.env.local scripts/apply-emall-all.mjs"
   },

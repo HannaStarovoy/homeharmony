@@ -1,3 +1,4 @@
+import {updateCategories,updateBeautyCategories} from './category-update.mjs';
 import {DatabaseSync,backup} from 'node:sqlite';
 import {mkdtemp,readFile,writeFile,rm,mkdir,unlink,readdir} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
@@ -47,7 +48,7 @@ export function createBackups(store){
    const tables=schema(db).filter(row=>row.type==='table'&&!AUTH.has(row.name)).map(row=>row.name);if(tables.some(name=>! /^[a-z_][a-z0-9_]*$/.test(name)))throw new Error('schema');
    for(const table of tables)db.exec('DELETE FROM main."'+table+'"');for(const table of tables)db.exec('INSERT INTO main."'+table+'" SELECT * FROM recovery_source."'+table+'"');
    // Invalidate every old browser version, including values from before the restore.
-   db.prepare('UPDATE products SET version=version+?').run(versionOffset);db.prepare('UPDATE orders SET version=version+?').run(versionOffset);if(db.prepare('PRAGMA foreign_key_check').all().length)throw new Problem(422,'Связи данных в копии повреждены. Восстановление отменено.');db.exec('COMMIT');inTransaction=false;committed=true;db.exec('PRAGMA foreign_keys=ON;');fkDisabled=false;db.exec('DETACH DATABASE recovery_source');attached=false;store.orders.expire();return {ok:true,...prepared.summary,safetyName};
+   db.prepare('UPDATE products SET version=version+?').run(versionOffset);db.prepare('UPDATE orders SET version=version+?').run(versionOffset);if(db.prepare('PRAGMA foreign_key_check').all().length)throw new Problem(422,'Связи данных в копии повреждены. Восстановление отменено.');db.exec('COMMIT');inTransaction=false;committed=true;db.exec('PRAGMA foreign_keys=ON;');fkDisabled=false;db.exec('DETACH DATABASE recovery_source');attached=false;updateCategories(db);updateBeautyCategories(db);store.orders.expire();return {ok:true,...prepared.summary,safetyName};
   }catch(error){if(inTransaction)db.exec('ROLLBACK');if(fkDisabled)db.exec('PRAGMA foreign_keys=ON;');if(attached)db.exec('DETACH DATABASE recovery_source');if(!committed)await Promise.all(written.map(path=>unlink(path).catch(()=>{})));throw error}
   finally{await rm(prepared.directory,{recursive:true,force:true})}
  }

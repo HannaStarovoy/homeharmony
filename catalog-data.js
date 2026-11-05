@@ -38,13 +38,13 @@ window.catalogData = {
     },
     {
       "id": "cosmetics",
-      "name": "Косметика и бытовая химия",
-      "parent": "all"
+      "name": "Косметика",
+      "parent": "beauty-health"
     },
     {
       "id": "creams",
       "name": "Кремы",
-      "parent": "cosmetics"
+      "parent": "face-care"
     },
     {
       "id": "hair",
@@ -108,13 +108,33 @@ window.catalogData = {
     },
     {
       "id": "oral-care",
-      "name": "Уход за полостью рта",
-      "parent": "beauty-health"
+      "name": "Уход за зубами",
+      "parent": "cosmetics"
     },
     {
       "id": "nail-care",
       "name": "Товары для маникюра и педикюра",
       "parent": "beauty-health"
+    },
+    {
+      "id": "neckwarmers",
+      "name": "Манишки",
+      "parent": "accessories"
+    },
+    {
+      "id": "face-care",
+      "name": "Уход за кожей лица",
+      "parent": "cosmetics"
+    },
+    {
+      "id": "foot-care",
+      "name": "Уход за кожей ног",
+      "parent": "cosmetics"
+    },
+    {
+      "id": "chemicals",
+      "name": "Бытовая химия",
+      "parent": "cosmetics"
     }
   ],
   "products": [
