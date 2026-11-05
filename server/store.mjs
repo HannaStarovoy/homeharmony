@@ -1,3 +1,4 @@
+import {initVariantDetails,migrateVariantDetails} from './variant-details.mjs';
 import {createAdminTools} from './admin-tools.mjs';
 import {createBackups} from './backups.mjs';
 import {initRecovery,snapshot,recordHistory,recoveryTools} from './recovery.mjs';
@@ -64,6 +65,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     } catch (error) { db.exec('ROLLBACK'); db.close(); throw error; }
   }
   if(!db.prepare('PRAGMA table_info(products)').all().some(c=>c.name==='merge_protected'))db.exec('ALTER TABLE products ADD COLUMN merge_protected INTEGER NOT NULL DEFAULT 0');
+  initVariantDetails(db);
   initRecovery(db);
   const orders=createOrderStore(db,{reserveHours});
   const categories = () => db.prepare('SELECT id,name,parent FROM categories ORDER BY rowid').all().map(c => ({...c}));
@@ -73,10 +75,12 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     const variants = db.prepare('SELECT * FROM variants ORDER BY position').all();
     const emallIds=new Map(db.prepare("SELECT product_id,external_id FROM import_products WHERE provider='emall'").all().map(row=>[row.product_id,row.external_id]));
     const sources=new Map(db.prepare('SELECT sku,external_sku,external_product_id FROM import_variants').all().map(row=>[row.sku,row]));
+    const details=new Map(db.prepare('SELECT * FROM variant_details').all().map(row=>[row.sku,row]));
     const byProduct = new Map();
     for (const v of variants) {
+      const detail=details.get(v.sku);
       if (!byProduct.has(v.product_id)) byProduct.set(v.product_id, []);
-      byProduct.get(v.product_id).push({sku:v.sku,name:v.name,options:JSON.parse(v.options),price:v.price_cents/100,old:v.old_cents/100,stock:publishedOnly?Math.max(0,v.stock-orders.reserved(v.sku)):v.stock,...(publishedOnly?{}:{reserved:orders.reserved(v.sku),available:Math.max(0,v.stock-orders.reserved(v.sku))}),color:v.color,images:JSON.parse(v.images),...(sources.has(v.sku)?{externalSku:sources.get(v.sku).external_sku,sourceManaged:true,...(!publishedOnly?{emallProductId:sources.get(v.sku).external_product_id}:{})}:{})});
+      byProduct.get(v.product_id).push({...(detail?{title:detail.title,description:detail.description,attributes:detail.attrs?Object.fromEntries(Object.entries(JSON.parse(detail.attrs)).filter(([key])=>!/импорт[её]р|importer/iu.test(key))):undefined}:{}),sku:v.sku,name:v.name,options:JSON.parse(v.options),price:v.price_cents/100,old:v.old_cents/100,stock:publishedOnly?Math.max(0,v.stock-orders.reserved(v.sku)):v.stock,...(publishedOnly?{}:{reserved:orders.reserved(v.sku),available:Math.max(0,v.stock-orders.reserved(v.sku))}),color:v.color,images:JSON.parse(v.images),...(sources.has(v.sku)?{externalSku:sources.get(v.sku).external_sku,sourceManaged:true,...(!publishedOnly?{emallProductId:sources.get(v.sku).external_product_id}:{})}:{})});
     }
     return rows.map(p => {
       const list = byProduct.get(p.id) || [];
@@ -84,7 +88,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       return publishedOnly ? value : {...value,status:p.status,version:p.version,updatedAt:p.updated_at,...(emallIds.has(p.id)?{emallId:emallIds.get(p.id)}:{})};
     });
   }
-  function saveProduct(input,id,{withinTransaction=false,returnProduct=true}={}) {
+  function saveProduct(input,id,{withinTransaction=false,returnProduct=true,allowReservedOptions=false}={}) {
     if(withinTransaction&&!db.isTransaction)throw new Error('An import requires an active transaction.');
     if(!withinTransaction)orders.expire();
     const value = validateProduct(input, categories(), db);
@@ -109,7 +113,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
           if(hold&&!replacement)throw new Problem(409,'Нельзя удалить вариант: он зарезервирован в заказе.');
           if(replacement&&replacement.stock<hold)throw new Problem(409,`Физический остаток ${old.sku} не может быть меньше резерва (${hold} шт.).`);
           const canonical=object=>JSON.stringify(Object.keys(object).sort().map(k=>[k,object[k]]));
-          if(hold&&canonical(JSON.parse(old.options))!==canonical(replacement.options))throw new Problem(409,'Нельзя менять параметры SKU, пока по нему есть резерв.');
+          if(hold&&!allowReservedOptions&&canonical(JSON.parse(old.options))!==canonical(replacement.options))throw new Problem(409,'Нельзя менять параметры SKU, пока по нему есть резерв.');
         }
       }
       if (current) {
@@ -121,7 +125,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
         db.prepare('INSERT INTO products(id,name,category_id,summary,attrs,images,status,date_rank,updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
           .run(productId,value.name,value.cat,value.summary,json(value.attrs),json(value.images),value.status,Date.now(),new Date().toISOString());
       }
-      value.variants.forEach((v,i)=>db.prepare('INSERT INTO variants VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(sku) DO UPDATE SET name=excluded.name,options=excluded.options,price_cents=excluded.price_cents,old_cents=excluded.old_cents,stock=excluded.stock,color=excluded.color,images=excluded.images,position=excluded.position').run(v.sku,productId,v.name,json(v.options),v.priceCents,v.oldCents,v.stock,v.color,json(v.images),i));
+      value.variants.forEach((v,i)=>{db.prepare('INSERT INTO variants VALUES(?,?,?,?,?,?,?,?,?,?) ON CONFLICT(sku) DO UPDATE SET name=excluded.name,options=excluded.options,price_cents=excluded.price_cents,old_cents=excluded.old_cents,stock=excluded.stock,color=excluded.color,images=excluded.images,position=excluded.position').run(v.sku,productId,v.name,json(v.options),v.priceCents,v.oldCents,v.stock,v.color,json(v.images),i);if(v.title!==undefined)db.prepare('INSERT INTO variant_details VALUES(?,?,?,?) ON CONFLICT(sku) DO UPDATE SET title=excluded.title,description=excluded.description,attrs=excluded.attrs').run(v.sku,v.title,v.description??null,v.attributes?json(v.attributes):null)});
       recordHistory(db,'edit',historyBefore,snapshot(db,[productId]));
       if(!withinTransaction)db.exec('COMMIT');
       return returnProduct?products(false,{expire:false}).find(p=>p.id===productId):db.prepare('SELECT id,version FROM products WHERE id=?').get(productId);
@@ -173,26 +177,31 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
       const all=new Map(products(false,{expire:false}).map(p=>[p.id,p])),seen=new Set();
       const chosen=input.products.map(item=>{const p=all.get(item?.id);if(!p||seen.has(p.id)||p.version!==item.version)throw new Problem(409,'Список изменился. Обновите товары и выберите заново.');seen.add(p.id);return p});
       if(chosen.some(p=>p.cat!==chosen[0].cat))throw new Problem(422,'Объединяйте товары одной категории.');
-      for(const p of chosen){if(db.prepare("SELECT 1 FROM import_products WHERE product_id=? AND environment='sandbox'").get(p.id))throw new Problem(422,'Тестовые товары нельзя объединять.');for(const v of p.variants)if(orders.reserved(v.sku))throw new Problem(409,'Сначала обработайте активные резервы выбранных товаров.');}
+      for(const p of chosen){if(db.prepare("SELECT 1 FROM import_products WHERE product_id=? AND environment='sandbox'").get(p.id))throw new Problem(422,'Тестовые товары нельзя объединять.');}
       const dimensions=input.dimensions;if(!Array.isArray(dimensions)||!dimensions.length||dimensions.length>5||new Set(dimensions).size!==dimensions.length||dimensions.some(k=>typeof k!=='string'||!k.trim()||k.length>60))throw new Problem(422,'Укажите от 1 до 5 характеристик.');
       const primary=chosen[0],attrs={...primary.attrs};dimensions.forEach(k=>delete attrs[k]);
-      const variants=chosen.flatMap(p=>p.variants.map(v=>({...v,options:input.options?.[v.sku],images:v.images.length?v.images:p.images})));
+      const variants=chosen.flatMap(p=>p.variants.map(v=>{const attributes={...(v.attributes||p.attrs)};dimensions.forEach(k=>delete attributes[k]);return {...v,title:v.title||p.name,description:v.description??p.summary,attributes,options:input.options?.[v.sku],images:v.images.length?v.images:p.images}}));
       if(variants.some(v=>!v.options||Object.keys(v.options).sort().join('|')!==[...dimensions].sort().join('|')))throw new Problem(422,'Заполните характеристики каждого варианта.');
-      const payload={...primary,name:input.name,attrs,variants,status:chosen.every(p=>p.status==='published')?'published':'draft'};
+      const payload={...primary,name:input.name??primary.name,attrs,variants,status:chosen.every(p=>p.status==='published')?'published':'draft'};
       validateProduct(payload,categories(),db);
       for(const p of chosen.slice(1))db.prepare('UPDATE variants SET product_id=? WHERE product_id=?').run(primary.id,p.id);
-      saveProduct(payload,primary.id,{withinTransaction:true,returnProduct:false});
+      saveProduct(payload,primary.id,{withinTransaction:true,returnProduct:false,allowReservedOptions:true});
       const now=new Date().toISOString();for(const p of chosen){db.prepare('UPDATE products SET merge_protected=1 WHERE id=?').run(p.id);if(p.id!==primary.id)db.prepare("UPDATE products SET deleted_at=?,status='draft',version=version+1,updated_at=? WHERE id=?").run(now,now,p.id)}
       recordHistory(db,'merge',[],snapshot(db,[primary.id]));
       db.exec('COMMIT');return {ok:true,id:primary.id,variants:variants.length};
     }catch(error){db.exec('ROLLBACK');throw error}
+  }
+  function saveVariant(input){
+    const p=products().find(p=>p.id===input?.id),v=p?.variants.find(v=>v.sku===input?.sku);if(!p||!v)throw new Problem(404,'Вариант не найден.');if(input.version!==p.version)throw new Problem(409,'Модель изменена. Откройте вариант заново.');
+    const edited=validateProduct({...input.product,status:p.status},categories(),db);if(edited.variants.length!==1||edited.variants[0].sku!==v.sku)throw new Problem(422,'Артикул варианта нельзя менять в индивидуальном редакторе.');const value=edited.variants[0];
+    return saveProduct({...p,variants:p.variants.map(item=>item.sku===v.sku?{...item,title:edited.name,description:edited.summary,attributes:edited.attrs,images:edited.images,price:value.priceCents/100,old:value.oldCents/100,stock:value.stock,options:value.options,color:value.color}:item)},p.id);
   }
   function isPublicMedia(url) {
     return !!db.prepare(`SELECT 1 FROM products p,json_each(p.images) i WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=?
       UNION ALL SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id,json_each(v.images) i
       WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=? LIMIT 1`).get(url,url);
   }
-  const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,bulkProducts,mergeProducts,isPublicMedia,orders,close:()=>db.close()};
+  const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,bulkProducts,mergeProducts,saveVariant,isPublicMedia,orders,close:()=>db.close()};
   store.recovery=recoveryTools(store);
   store.tools=createAdminTools(store);
   store.backups=createBackups(store);
@@ -202,6 +211,7 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
   if(publicationPlanPath)applyCatalogPublication(store,publicationPlanPath);
   updateCategories(db);
   updateBeautyCategories(db);
+  migrateVariantDetails(db);
   return store;
 }
 
@@ -258,7 +268,7 @@ export function validateProduct(input, categories, db) {
     if (!Number.isSafeInteger(v.stock) || v.stock<0 || v.stock>1_000_000) throw new Problem(422,'Остаток — целое число от 0 до 1 000 000.', 'variants');
     const color=v.color??'#cad6e8';
     if (typeof color!=='string' || !/^#[a-f0-9]{6}$/i.test(color)) throw new Problem(422,'Проверьте цвет варианта.', 'variants');
-    return {sku,name:Object.values(options).join(' · ')||'Стандартный',options,priceCents,oldCents,stock:v.stock,color,images:photos(v.images??[],db)};
+    return {...(v.title!==undefined?{title:text(v.title,'Название варианта',200,true),description:v.description===null?null:text(v.description??'','Описание варианта',10000),attributes:v.attributes===undefined?undefined:record(v.attributes,'Характеристики варианта')}:{}),sku,name:Object.values(options).join(' · ')||'Стандартный',options,priceCents,oldCents,stock:v.stock,color,images:photos(v.images??[],db)};
   });
   return {name,cat:input.cat,summary,attrs,images,status:input.status,variants};
 }

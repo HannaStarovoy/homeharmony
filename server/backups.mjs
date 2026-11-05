@@ -1,3 +1,4 @@
+import {initVariantDetails,migrateVariantDetails} from './variant-details.mjs';
 import {updateCategories,updateBeautyCategories} from './category-update.mjs';
 import {DatabaseSync,backup} from 'node:sqlite';
 import {mkdtemp,readFile,writeFile,rm,mkdir,unlink,readdir} from 'node:fs/promises';
@@ -29,6 +30,9 @@ export function createBackups(store){
   try{
    const path=join(directory,'restore.sqlite');await writeFile(path,bytes,{mode:0o600});source=new DatabaseSync(path,{readOnly:true});
    if(source.prepare('PRAGMA integrity_check').get().integrity_check!=='ok'||source.prepare('PRAGMA foreign_key_check').all().length)throw new Error('integrity');
+   if(!source.prepare("SELECT 1 FROM sqlite_master WHERE type='table' AND name='variant_details'").get()){
+    const expected=schema(db).filter(row=>row.name!=='variant_details');if(JSON.stringify(schema(source))!==JSON.stringify(expected))throw new Problem(422,'Структура копии несовместима с этой версией.');source.close();source=new DatabaseSync(path);initVariantDetails(source);migrateVariantDetails(source);
+   }
    if(JSON.stringify(schema(source))!==JSON.stringify(schema(db)))throw new Problem(422,'Копия создана другой версией магазина. Используйте ту же версию приложения.');
    const expected=new Set(source.prepare('SELECT filename FROM media').all().map(row=>row.filename)),files=new Map();
    for(const file of archive.files){if(!safeName(file?.name)||files.has(file.name)||!expected.has(file.name)||typeof file.data!=='string')throw new Error('media');const data=Buffer.from(file.data,'base64');if(data.length>8*1024*1024||hash(data)!==file.hash)throw new Error('media');files.set(file.name,data)}
@@ -48,7 +52,7 @@ export function createBackups(store){
    const tables=schema(db).filter(row=>row.type==='table'&&!AUTH.has(row.name)).map(row=>row.name);if(tables.some(name=>! /^[a-z_][a-z0-9_]*$/.test(name)))throw new Error('schema');
    for(const table of tables)db.exec('DELETE FROM main."'+table+'"');for(const table of tables)db.exec('INSERT INTO main."'+table+'" SELECT * FROM recovery_source."'+table+'"');
    // Invalidate every old browser version, including values from before the restore.
-   db.prepare('UPDATE products SET version=version+?').run(versionOffset);db.prepare('UPDATE orders SET version=version+?').run(versionOffset);if(db.prepare('PRAGMA foreign_key_check').all().length)throw new Problem(422,'Связи данных в копии повреждены. Восстановление отменено.');db.exec('COMMIT');inTransaction=false;committed=true;db.exec('PRAGMA foreign_keys=ON;');fkDisabled=false;db.exec('DETACH DATABASE recovery_source');attached=false;updateCategories(db);updateBeautyCategories(db);store.orders.expire();return {ok:true,...prepared.summary,safetyName};
+   db.prepare('UPDATE products SET version=version+?').run(versionOffset);db.prepare('UPDATE orders SET version=version+?').run(versionOffset);if(db.prepare('PRAGMA foreign_key_check').all().length)throw new Problem(422,'Связи данных в копии повреждены. Восстановление отменено.');db.exec('COMMIT');inTransaction=false;committed=true;db.exec('PRAGMA foreign_keys=ON;');fkDisabled=false;db.exec('DETACH DATABASE recovery_source');attached=false;updateCategories(db);updateBeautyCategories(db);migrateVariantDetails(db);store.orders.expire();return {ok:true,...prepared.summary,safetyName};
   }catch(error){if(inTransaction)db.exec('ROLLBACK');if(fkDisabled)db.exec('PRAGMA foreign_keys=ON;');if(attached)db.exec('DETACH DATABASE recovery_source');if(!committed)await Promise.all(written.map(path=>unlink(path).catch(()=>{})));throw error}
   finally{await rm(prepared.directory,{recursive:true,force:true})}
  }

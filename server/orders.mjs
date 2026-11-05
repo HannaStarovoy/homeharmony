@@ -76,7 +76,7 @@ export function createOrderStore(db,{reserveHours=24}={}){
    if(existing){if(existing.request_hash!==requestDigest)throw new Problem(409,'Состав отправляемого заказа изменился. Проверьте корзину и повторите оформление.');db.exec('COMMIT');return {replayed:true,receipt:receipt(existing)}}
    if(value.shippingCents!==deliveries[value.delivery].priceCents)throw changed('Стоимость доставки изменилась. Проверьте корзину.');
    const lines=value.items.map(item=>{
-    const v=db.prepare('SELECT v.*,p.status,p.name AS product_name FROM variants v JOIN products p ON p.id=v.product_id WHERE v.sku=? AND v.product_id=?').get(item.sku,item.id);
+    const v=db.prepare('SELECT v.*,p.status,coalesce((SELECT title FROM variant_details WHERE sku=v.sku),p.name) AS product_name FROM variants v JOIN products p ON p.id=v.product_id WHERE v.sku=? AND v.product_id=?').get(item.sku,item.id);
     if(!v||v.status!=='published')throw changed('Один из товаров больше недоступен. Проверьте корзину.');
     if(v.price_cents!==item.priceCents)throw changed('Цена товара изменилась. Проверьте корзину перед отправкой.');
     if(item.qty>v.stock-reserved(v.sku))throw changed(`Недостаточно товара «${v.product_name}». Проверьте количество в корзине.`);
@@ -113,7 +113,7 @@ export function createOrderStore(db,{reserveHours=24}={}){
    if(current.version!==input.version)throw new Problem(409,'Заказ уже изменён. Обновите карточку перед сменой статуса.');
    if(!transitions[current.status].includes(input.status))throw new Problem(409,'Этот переход статуса недоступен. Отправленные и завершённые заказы нельзя отменить через эту кнопку.');
    if(current.status==='confirmed'&&['shipped','completed'].includes(input.status)){
-    const historyIds=db.prepare('SELECT DISTINCT product_id FROM order_items WHERE order_id=?').all(id).map(row=>row.product_id),historyBefore=snapshot(db,historyIds);
+    const historyIds=db.prepare('SELECT DISTINCT v.product_id FROM order_items i JOIN variants v ON v.sku=i.sku WHERE i.order_id=?').all(id).map(row=>row.product_id),historyBefore=snapshot(db,historyIds);
     const held=db.prepare('SELECT sku,qty FROM reservations WHERE order_id=?').all(id);
     const count=db.prepare('SELECT count(*) AS n FROM order_items WHERE order_id=?').get(id).n;
     if(held.length!==count)throw new Problem(409,'Резерв заказа изменился. Проверьте остатки перед отправкой.');
@@ -121,7 +121,7 @@ export function createOrderStore(db,{reserveHours=24}={}){
      const result=db.prepare('UPDATE variants SET stock=stock-? WHERE sku=? AND stock>=?').run(line.qty,line.sku,line.qty);
      if(!result.changes)throw new Problem(409,'Остатка недостаточно для отправки. Проверьте склад.');
     }
-    db.prepare('UPDATE products SET version=version+1,updated_at=? WHERE id IN (SELECT product_id FROM order_items WHERE order_id=?)').run(new Date(now).toISOString(),id);
+    db.prepare('UPDATE products SET version=version+1,updated_at=? WHERE id IN (SELECT v.product_id FROM order_items i JOIN variants v ON v.sku=i.sku WHERE i.order_id=?)').run(new Date(now).toISOString(),id);
     recordHistory(db,'order-stock',historyBefore,snapshot(db,historyIds));
     db.prepare('DELETE FROM reservations WHERE order_id=?').run(id);
    }

@@ -59,7 +59,7 @@ const sharp=require('sharp');
   // Changes survive an actual restart, and the admin session remains valid.
   await new Promise(resolve=>instance.server.close(resolve));instance.store.close();instance=createApp({dataDir:dir});await new Promise(resolve=>instance.server.listen(port,'127.0.0.1',resolve));
   await page.goto(base+'/admin');await page.getByRole('searchbox',{name:'Поиск товаров',exact:true}).fill('Тестовый шампунь');
-  await page.getByRole('button',{name:'Редактировать',exact:true}).click();
+  await page.getByRole('button',{name:'Все варианты',exact:true}).click();
   await page.getByRole('spinbutton',{name:'Цена варианта 2',exact:true}).fill('22.9');
   await page.getByRole('button',{name:'Сохранить на витрине',exact:true}).click();await page.getByRole('status').filter({hasText:'доступен на витрине'}).waitFor();
   await publicPage.goto(base+'/?view=product&product='+saved.id+'&sku=ADMIN-SHAMPOO-500');assert.match(await publicPage.locator('.detail-price').innerText(),/22,9 BYN/);
