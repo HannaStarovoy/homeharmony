@@ -97,7 +97,7 @@ export function createApp({dataDir,origin=process.env.SHOP_ORIGIN,secureCookies=
         if (path==='/api/admin/products' && req.method==='POST') return send(res,201,store.saveProduct(await jsonBody(req)));
         const match=path.match(/^\/api\/admin\/products\/([a-zA-Z0-9-]+)$/);
         if(match&&req.method==='DELETE')return send(res,200,store.deleteProduct(match[1],(await jsonBody(req))?.version));
-        if (match && req.method==='PUT') return send(res,200,store.saveProduct(await jsonBody(req),match[1]));
+        if (match && req.method==='PUT') return send(res,200,store.saveProductRequest(await jsonBody(req),match[1]));
         if (path==='/api/admin/media' && req.method==='POST') {
           const input=await body(req,8*1024*1024);
           let output,info;

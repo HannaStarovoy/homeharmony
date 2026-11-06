@@ -196,12 +196,30 @@ export function openStore(dataDir = process.env.SHOP_DATA_DIR || join(root, 'var
     const edited=validateProduct({...input.product,status:p.status},categories(),db);if(edited.variants.length!==1||edited.variants[0].sku!==v.sku)throw new Problem(422,'Артикул варианта нельзя менять в индивидуальном редакторе.');const value=edited.variants[0];
     return saveProduct({...p,variants:p.variants.map(item=>item.sku===v.sku?{...item,title:edited.name,description:edited.summary,attributes:edited.attrs,images:edited.images,price:value.priceCents/100,old:value.oldCents/100,stock:value.stock,options:value.options,color:value.color}:item)},p.id);
   }
+  // Older/open editors can submit one member to the full-product endpoint.
+  // Treat that payload as an individual edit, never as deletion of its siblings.
+  function saveProductRequest(input,id){
+    const p=products().find(p=>p.id===id),sku=input?.variants?.length===1?input.variants[0]?.sku:null;
+    if(p&&p.variants.length>1&&typeof sku==='string'&&p.variants.some(v=>v.sku===sku)){
+      const grouped=db.prepare('SELECT merge_protected FROM products WHERE id=?').get(id)?.merge_protected;
+      const linked=p.variants.some(v=>v.sku!==sku&&db.prepare('SELECT 1 FROM import_variants WHERE sku=?').get(v.sku));
+      if(grouped||linked){
+        const selected=p.variants.find(v=>v.sku===sku),product={...input};
+        if(product.name===p.name&&selected.title)product.name=selected.title;
+        if(product.summary===p.summary&&selected.description!==undefined)product.summary=selected.description;
+        if(JSON.stringify(product.attrs)===JSON.stringify(p.attrs)&&selected.attributes)product.attrs={...p.attrs,...selected.attributes};
+        if(JSON.stringify(product.images)===JSON.stringify(p.images)&&selected.images.length)product.images=selected.images;
+        return saveVariant({id,sku,version:input.version,product});
+      }
+    }
+    return saveProduct(input,id);
+  }
   function isPublicMedia(url) {
     return !!db.prepare(`SELECT 1 FROM products p,json_each(p.images) i WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=?
       UNION ALL SELECT 1 FROM variants v JOIN products p ON p.id=v.product_id,json_each(v.images) i
       WHERE p.deleted_at IS NULL AND p.status='published' AND i.value=? LIMIT 1`).get(url,url);
   }
-  const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,bulkProducts,mergeProducts,saveVariant,isPublicMedia,orders,close:()=>db.close()};
+  const store={db,dataDir,uploadDir,categories,products,saveProduct,deleteProduct,bulkProducts,mergeProducts,saveVariant,saveProductRequest,isPublicMedia,orders,close:()=>db.close()};
   store.recovery=recoveryTools(store);
   store.tools=createAdminTools(store);
   store.backups=createBackups(store);
