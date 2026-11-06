@@ -337,3 +337,7 @@ p { line-height: 1.7; }
 }
 .bulk-toolbar { position: sticky; top: 0; z-index: 35; background: #f3f4f5; box-shadow: 0 5px 14px #0000000b; }
 @media(max-width:720px){.bulk-toolbar { max-height: 42vh; overflow-y: auto; }}
+.quick-product-list .grouped-button { display: inline-flex; width: auto; min-height: 32px; margin-top: 7px; padding: 5px 10px; font-size: 13px; color: #342f29; background: #f3f4f5; border-color: #d6d7d9; }
+.group-list-page > .heading { justify-content: flex-start; padding-top: 0; margin-bottom: 18px; }
+.group-list-page > .heading h1 { font-size: 29px; margin: 0; }
+.group-list-page .grouped-button { display: none; }
